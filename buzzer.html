@@ -11,19 +11,43 @@
     #team-title { font-size:40px; font-weight:900; text-align:center; margin:15px 0 5px 0; text-shadow: 0 4px 10px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 2px; }
     #status-text { text-align:center; font-size:18px; margin-bottom:20px; color: #ffeb85; text-shadow: 0 2px 4px rgba(0,0,0,0.8); opacity: 0.9; }
     
-    .buzzer-container {
+    .wood-board {
       flex: 1;
+      margin: 10px 0;
+      border: 6px solid #ffd700;
+      border-radius: 30px;
+      background: #5c3a21;
+      background-image: 
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 15px,
+          rgba(0,0,0,0.1) 15px,
+          rgba(0,0,0,0.1) 30px
+        ),
+        linear-gradient(180deg, #6b4324, #2a170a);
+      box-shadow: 
+        0 0 30px rgba(255, 215, 0, 0.5),
+        inset 0 0 40px rgba(0,0,0,0.8);
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 20px;
-      /* Add a TV studio back-glow */
-      background: radial-gradient(circle at center, rgba(255, 215, 0, 0.08) 0%, transparent 60%);
+      position: relative;
+    }
+
+    .buzzer-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(255, 215, 0, 0.1) 0%, transparent 60%);
+      width: 100%;
+      height: 100%;
     }
 
     .podium {
-      width: 280px;
-      height: 280px;
+      --size: min(80vw, 55vh, 300px);
+      width: var(--size);
+      height: var(--size);
       border-radius: 50%;
       background: linear-gradient(135deg, #0d47a1, #0a1f44); /* Blue base */
       box-shadow: 
@@ -40,8 +64,8 @@
     .podium::after {
       content: '';
       position: absolute;
-      width: 260px;
-      height: 260px;
+      width: calc(var(--size) - 20px);
+      height: calc(var(--size) - 20px);
       border-radius: 50%;
       background: linear-gradient(to bottom, #1565c0, #0a2656); /* Top of blue base */
       box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
@@ -49,8 +73,8 @@
     }
 
     #buzz-btn {
-      width: 220px;
-      height: 220px;
+      width: calc(var(--size) - 60px);
+      height: calc(var(--size) - 60px);
       border-radius: 50%;
       border: 2px solid rgba(0,0,0,0.5);
       font-size: 32px;
@@ -125,9 +149,11 @@
   <div id="team-title">TEAM</div>
   <div id="status-text">Connecting to host...</div>
 
-  <div class="buzzer-container">
-    <div class="podium">
-      <button id="buzz-btn" disabled>STANDBY</button>
+  <div class="wood-board">
+    <div class="buzzer-container">
+      <div class="podium">
+        <button id="buzz-btn" disabled>STANDBY</button>
+      </div>
     </div>
   </div>
 
