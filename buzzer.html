@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
+  <title>Buzzer</title>
+  <style>
+    * { box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+    body { margin:0; height:100dvh; display:flex; flex-direction:column; padding:20px; background:#071427; color:#fff; font-family:sans-serif; }
+    .header { display:flex; justify-content:space-between; font-size:14px; opacity:0.8; }
+    #team-title { font-size:32px; font-weight:900; text-align:center; margin:10px 0; }
+    #status-text { text-align:center; font-size:16px; margin-bottom:12px; }
+    #buzz-btn {
+      flex:1; border:none; border-radius:24px; font-size:48px; font-weight:900;
+      color:#fff; background:#1e293b; opacity:0.5; transition:0.1s;
+    }
+    #buzz-btn.countdown { 
+      opacity: 0.9; 
+      background: #eab308; 
+      color: #000; 
+      font-size: 64px; 
+    }
+    #buzz-btn.armed { opacity:1; background:var(--team-color, #3b82f6); box-shadow:0 0 50px var(--team-color, #3b82f6); }
+    #buzz-btn.winner { background:#22c55e !important; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span>Room: <b id="room-lbl">-</b></span>
+    <span id="conn-lbl">Connecting...</span>
+  </div>
+
+  <div id="team-title">TEAM</div>
+  <div id="status-text">Connecting to host...</div>
+
+  <button id="buzz-btn" disabled>STANDBY</button>
+
+<script>
+  const BACKEND_HOST = "feud-backend.feud-buzz-app.workers.dev";
+  const params = new URLSearchParams(window.location.search);
+
+  // If a room parameter is present in the URL, FORCE overwrite localStorage
+  let room = params.get("room");
+  let team = params.get("team");
+  let name = params.get("name");
+  let color = params.get("color");
+
+  if (room) {
+    room = room.toUpperCase();
+    localStorage.setItem("feud_room", room);
+    if (team !== null) localStorage.setItem("feud_team", team);
+    if (name) localStorage.setItem("feud_name", name);
+    if (color) localStorage.setItem("feud_color", color);
+  } else {
+    // Fall back to storage only if URL had no parameters
+    room = (localStorage.getItem("feud_room") || "").toUpperCase();
+    team = localStorage.getItem("feud_team") || "0";
+    name = localStorage.getItem("feud_name") || `Team ${parseInt(team) + 1}`;
+    color = localStorage.getItem("feud_color") || "#3b82f6";
+  }
+
+  // Guard: if no room anywhere, alert user
+  if (!room || room.length !== 4) {
+    document.getElementById("status-text").textContent = "Invalid or missing room code. Please scan QR again.";
+    document.getElementById("conn-lbl").textContent = "No Room";
+    throw new Error("Invalid room code");
+  }
+
+  // UI Setup
+  document.documentElement.style.setProperty("--team-color", color);
+  document.getElementById("room-lbl").textContent = room;
+  document.getElementById("team-title").textContent = name;
+  document.getElementById("team-title").style.color = color;
+
+  const btn = document.getElementById("buzz-btn");
+  const status = document.getElementById("status-text");
+  const connLbl = document.getElementById("conn-lbl");
+
+  // Keep screen awake
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').catch(() => {});
+  }
+
+  // 2. Resilient WebSocket Manager
+  let ws = null;
+  let reconnectTimeout = null;
+  let countdownTimer = null;
+  let pingTimer = null;
+  let retryDelay = 1000;      // Initial delay: 1 second
+  const MAX_RETRY_DELAY = 15000; // Cap delay at 15 seconds
+  function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    clearTimeout(reconnectTimeout);
+    clearInterval(pingTimer);
+    connLbl.textContent = "Reconnecting...";
+    ws = new WebSocket(`wss://${BACKEND_HOST}/?room=${room}`);
+
+    ws.onopen = () => {
+      retryDelay = 1000; // Reset backoff on successful connection
+      connLbl.textContent = "Online";
+      status.textContent = "Connected. Waiting for host...";
+      ws.send(JSON.stringify({ type: "REGISTER_PLAYER", team, name }));
+      clearInterval(pingTimer);
+    };
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "PONG") {
+        return; 
+      }
+
+      // Restore active state if reconnecting mid-game
+      if (data.type === "ROOM_STATE") {
+        if (data.isArmed && !data.winner) {
+          btn.disabled = false;
+          btn.className = "armed";
+          btn.textContent = "BUZZ!";
+          status.textContent = "TAP NOW!";
+
+          // Start pinging while armed
+          clearInterval(pingTimer);
+          pingTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "PING" }));
+            }
+          }, 7000);
+        }
+      }
+
+      // Unlock buzzer
+      if (data.type === "ARMED") {
+        btn.disabled = false;
+        btn.className = "armed";
+        btn.textContent = "BUZZ!";
+        status.textContent = "TAP NOW!";
+        navigator.vibrate?.([80, 40, 80]);
+
+        // Start pinging while armed
+        clearInterval(pingTimer);
+        pingTimer = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "PING" }));
+          }
+        }, 7000);
+      }
+
+      // Lock out
+      if (data.type === "LOCKED") {
+        clearInterval(countdownTimer);
+        clearInterval(pingTimer); // Stop pinging to allow backend to hibernate
+        btn.disabled = true;
+        btn.classList.remove("armed", "countdown");
+        if (data.winner.team === team) {
+          btn.classList.add("winner");
+          btn.textContent = "YOU BUZZED!";
+          status.textContent = "You got in first! Answer now.";
+          navigator.vibrate?.([100, 50, 100]);
+        } else {
+          btn.textContent = "LOCKED OUT";
+          status.textContent = `${data.winner.name} buzzed first!`;
+        }
+      }
+
+      // Reset
+      if (data.type === "RESET") {
+        clearInterval(countdownTimer);
+        clearInterval(pingTimer); // Stop pinging to allow backend to hibernate
+        btn.disabled = true;
+        btn.className = "";
+        btn.textContent = "STANDBY";
+        status.textContent = "Waiting for next question...";
+      }
+    };
+
+    ws.onclose = () => {
+      clearInterval(pingTimer);
+      connLbl.textContent = "Offline";
+      status.textContent = `Disconnected. Retrying in ${(retryDelay / 1000).toFixed(0)}s...`;
+
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(connect, retryDelay);
+
+      // Double the wait time for subsequent failures, capped at 15s
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+    };
+
+    ws.onerror = (err) => {
+      console.error("WS Error:", err);
+      connLbl.textContent = "Error";
+      status.textContent = "Connection refused by server. Check room code.";
+    };
+  }
+  // 3. Re-engage on Phone Tab Switching / App Unlocking
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      connect();
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(() => {});
+      }
+    }
+  });
+  window.addEventListener("pageshow", connect);
+  window.addEventListener("online", connect);
+
+  // 4. Instant Touch Tap Handler
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!btn.disabled && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "BUZZ", team }));
+    }
+  });
+
+  // Initial connection
+  connect();
+</script>
+</body>
+</html>
