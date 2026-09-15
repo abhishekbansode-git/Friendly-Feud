@@ -158,11 +158,6 @@
   </div>
 
 <script>
-  
-  // ============================================================
-  // FRIENDLY FEUD PHONE - WebRTC buzzer client
-  // Cloudflare is used ONLY for signaling.
-  // ============================================================
   const BACKEND_HOST = "feud-backend.feud-buzz-app.workers.dev";
   const params = new URLSearchParams(window.location.search);
 
@@ -191,6 +186,7 @@
     throw new Error("Invalid room code");
   }
 
+  team = String(team);
   document.documentElement.style.setProperty("--team-color", color);
   document.getElementById("room-lbl").textContent = room;
   document.getElementById("team-title").textContent = name;
@@ -200,195 +196,287 @@
   const status = document.getElementById("status-text");
   const connLbl = document.getElementById("conn-lbl");
 
-  let signalingWs = null;
+  if ("wakeLock" in navigator) {
+    navigator.wakeLock.request("screen").catch(() => {});
+  }
+
+  let ws = null;
+  let reconnectTimeout = null;
+  let retryDelay = 1000;
+  const MAX_RETRY_DELAY = 15000;
+
   let pc = null;
-  let channel = null;
-  let reconnectTimer = null;
+  let dataChannel = null;
+  let pendingIce = [];
+  let remoteDescriptionSet = false;
+  let buzzSent = false;
 
-  function connectSignaling() {
-    if (signalingWs &&
-        (signalingWs.readyState === WebSocket.OPEN ||
-         signalingWs.readyState === WebSocket.CONNECTING)) return;
-
-    connLbl.textContent = "Connecting...";
-
-    signalingWs = new WebSocket(
-      `wss://${BACKEND_HOST}/?room=${encodeURIComponent(room)}` +
-      `&role=player&team=${encodeURIComponent(team)}`
-    );
-
-    signalingWs.onopen = () => {
-      signalingWs.send(JSON.stringify({
-        type: "REGISTER_PLAYER",
-        room,
-        team,
-        name
-      }));
-    };
-
-    signalingWs.onmessage = async event => {
-      try {
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === "WEBRTC_OFFER" && msg.description) {
-          await acceptOffer(msg.description);
-        }
-
-        if (msg.type === "WEBRTC_ICE" && msg.candidate && pc) {
-          try { await pc.addIceCandidate(msg.candidate); } catch {}
-        }
-      } catch (e) {
-        console.warn("Signaling message error", e);
-      }
-    };
-
-    signalingWs.onclose = () => {
-      connLbl.textContent = "Offline";
-      status.textContent = "Reconnecting...";
-      clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connectSignaling, 2500);
-    };
+  function sendSignal(message) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+      return true;
+    }
+    return false;
   }
 
-  async function waitForIceGathering() {
-    if (!pc || pc.iceGatheringState === "complete") return;
-
-    await new Promise(resolve => {
-      const timer = setInterval(() => {
-        if (!pc || pc.iceGatheringState === "complete") {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 50);
-      setTimeout(() => {
-        clearInterval(timer);
-        resolve();
-      }, 8000);
-    });
+  function setStandby(text = "Waiting for host...") {
+    btn.disabled = true;
+    btn.className = "";
+    btn.textContent = "STANDBY";
+    status.textContent = text;
   }
 
-  function installChannel(ch) {
-    channel = ch;
-
-    ch.onopen = () => {
-      connLbl.textContent = "Online";
-      status.textContent = "Connected. Waiting for host...";
-    };
-
-    ch.onclose = () => {
-      connLbl.textContent = "Offline";
-      status.textContent = "Connection lost. Reconnecting...";
-    };
-
-    ch.onerror = e => console.warn("WebRTC DataChannel error", e);
-
-    ch.onmessage = event => {
-      let data;
-      try { data = JSON.parse(event.data); } catch { return; }
-
-      if (data.type === "ARMED") {
-        btn.disabled = false;
-        btn.className = "armed";
-        btn.textContent = "BUZZ!";
-        status.textContent = "TAP NOW!";
-        navigator.vibrate?.([80, 40, 80]);
-      }
-
-      if (data.type === "LOCKED") {
-        btn.disabled = true;
-        btn.classList.remove("armed", "countdown");
-
-        if (String(data.winner?.team) === String(team)) {
-          btn.classList.add("winner");
-          btn.textContent = "YOU BUZZED!";
-          status.textContent = "You got in first! Answer now.";
-          navigator.vibrate?.([100, 50, 100]);
-        } else {
-          btn.textContent = "LOCKED OUT";
-          status.textContent = `${data.winner?.name || "Other team"} buzzed first!`;
-        }
-      }
-
-      if (data.type === "RESET") {
-        btn.disabled = true;
-        btn.className = "";
-        btn.textContent = "STANDBY";
-        status.textContent = "Waiting for next question...";
-      }
-    };
+  function setArmed() {
+    buzzSent = false;
+    btn.disabled = false;
+    btn.className = "armed";
+    btn.textContent = "BUZZ!";
+    status.textContent = "TAP NOW!";
+    navigator.vibrate?.([80, 40, 80]);
   }
 
-  async function acceptOffer(offer) {
+  function setLocked(winner) {
+    btn.disabled = true;
+    btn.classList.remove("armed", "countdown");
+
+    if (String(winner.team) === team) {
+      btn.classList.add("winner");
+      btn.textContent = "YOU BUZZED!";
+      status.textContent = "You got in first! Answer now.";
+      navigator.vibrate?.([100, 50, 100]);
+    } else {
+      btn.textContent = "LOCKED OUT";
+      status.textContent = `${winner.name || "The other team"} buzzed first!`;
+    }
+  }
+
+  function setReset() {
+    buzzSent = false;
+    btn.disabled = true;
+    btn.className = "";
+    btn.textContent = "STANDBY";
+    status.textContent = "Waiting for next question...";
+  }
+
+  function createPeer() {
     if (pc) {
-      try { pc.close(); } catch {}
+      try { pc.close(); } catch (_) {}
     }
 
     pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     });
 
-    pc.ondatachannel = event => installChannel(event.channel);
+    pendingIce = [];
+    remoteDescriptionSet = false;
 
     pc.onicecandidate = event => {
-      if (event.candidate && signalingWs?.readyState === WebSocket.OPEN) {
-        signalingWs.send(JSON.stringify({
+      if (event.candidate) {
+        sendSignal({
           type: "WEBRTC_ICE",
-          room,
-          team,
+          team: Number(team),
           candidate: event.candidate
-        }));
+        });
       }
     };
 
     pc.onconnectionstatechange = () => {
+      console.log("Phone WebRTC state:", pc.connectionState);
+
       if (pc.connectionState === "connected") {
-        connLbl.textContent = "Online";
+        connLbl.textContent = "WebRTC Connected";
+        if (!btn.classList.contains("armed") && btn.textContent !== "YOU BUZZED!") {
+          status.textContent = "Connected. Waiting for host...";
+        }
+      } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
+        if (pc.connectionState === "failed") {
+          status.textContent = "WebRTC failed. Waiting for host...";
+        }
       }
     };
 
-    await pc.setRemoteDescription(offer);
+    pc.ondatachannel = event => {
+      const dc = event.channel;
+      if (dataChannel && dataChannel !== dc) {
+        try { dataChannel.close(); } catch (_) {}
+      }
+      dataChannel = dc;
+      dataChannel.onopen = () => {
+        connLbl.textContent = "WebRTC Connected";
+        status.textContent = "Connected. Waiting for host...";
+      };
 
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await waitForIceGathering();
+      dataChannel.onclose = () => {
+        if (dataChannel === dc) {
+          dataChannel = null;
+          connLbl.textContent = "Signaling Online";
+          status.textContent = "Waiting for host...";
+          setStandby("Waiting for host...");
+        }
+      };
 
-    // Only SDP signaling goes through Cloudflare.
-    signalingWs.send(JSON.stringify({
-      type: "WEBRTC_ANSWER",
-      room,
-      team,
-      description: pc.localDescription
-    }));
+      dataChannel.onerror = e => console.error("Phone DataChannel error:", e);
+
+      dataChannel.onmessage = event => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "ARMED") {
+            setArmed();
+          } else if (msg.type === "LOCKED" && msg.winner) {
+            setLocked(msg.winner);
+          } else if (msg.type === "RESET") {
+            setReset();
+          }
+        } catch (e) {
+          console.error("Bad WebRTC data message:", e);
+        }
+      };
+    };
+
+    return pc;
   }
+
+  async function handleOffer(offer) {
+    try {
+      const peer = createPeer();
+
+      await peer.setRemoteDescription(new RTCSessionDescription(offer));
+      remoteDescriptionSet = true;
+
+      for (const candidate of pendingIce) {
+        try { await peer.addIceCandidate(candidate); } catch (_) {}
+      }
+      pendingIce = [];
+
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+
+      sendSignal({
+        type: "WEBRTC_ANSWER",
+        team: Number(team),
+        answer: peer.localDescription
+      });
+    } catch (e) {
+      console.error("WebRTC offer handling failed:", e);
+      status.textContent = "WebRTC setup failed. Retrying...";
+    }
+  }
+
+  async function handleIce(candidate) {
+    if (!candidate) return;
+
+    if (!pc || !remoteDescriptionSet) {
+      pendingIce.push(candidate);
+      return;
+    }
+
+    try {
+      await pc.addIceCandidate(candidate);
+    } catch (e) {
+      console.error("ICE candidate failed:", e);
+    }
+  }
+
+  function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    clearTimeout(reconnectTimeout);
+    connLbl.textContent = "Connecting...";
+    status.textContent = "Connecting to host...";
+
+    ws = new WebSocket(`wss://${BACKEND_HOST}/?room=${room}`);
+
+    ws.onopen = () => {
+      retryDelay = 1000;
+      connLbl.textContent = "Signaling Online";
+      status.textContent = "Connected. Waiting for host...";
+
+      sendSignal({
+        type: "REGISTER_PLAYER",
+        team: Number(team),
+        name
+      });
+    };
+
+    ws.onmessage = async event => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "ROOM_STATE") {
+          if (msg.isArmed && !msg.winner) setArmed();
+          return;
+        }
+
+        if (msg.type === "WEBRTC_OFFER") {
+          // The worker should route the host's offer to the matching team.
+          if (msg.team === undefined || String(msg.team) === team) {
+            await handleOffer(msg.offer);
+          }
+          return;
+        }
+
+        if (msg.type === "WEBRTC_ICE") {
+          if (msg.team === undefined || String(msg.team) === team) {
+            await handleIce(msg.candidate);
+          }
+          return;
+        }
+      } catch (e) {
+        console.error("Signaling message error:", e);
+      }
+    };
+
+    ws.onclose = () => {
+      connLbl.textContent = "Offline";
+      if (!dataChannel || dataChannel.readyState !== "open") {
+        setStandby(`Disconnected. Retrying in ${(retryDelay / 1000).toFixed(0)}s...`);
+      }
+
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+    };
+
+    ws.onerror = err => {
+      console.error("Signaling error:", err);
+      connLbl.textContent = "Error";
+    };
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      connect();
+      if ("wakeLock" in navigator) {
+        navigator.wakeLock.request("screen").catch(() => {});
+      }
+    }
+  });
+
+  window.addEventListener("pageshow", connect);
+  window.addEventListener("online", connect);
 
   btn.addEventListener("pointerdown", e => {
     e.preventDefault();
 
-    if (!btn.disabled && channel && channel.readyState === "open") {
-      channel.send(JSON.stringify({
+    if (
+      !btn.disabled &&
+      dataChannel &&
+      dataChannel.readyState === "open" &&
+      !buzzSent
+    ) {
+      buzzSent = true;
+      dataChannel.send(JSON.stringify({
         type: "BUZZ",
-        team: String(team),
-        name,
-        clientTime: performance.now()
+        team: Number(team),
+        name
       }));
     }
   });
 
-  if ("wakeLock" in navigator) {
-    navigator.wakeLock.request("screen").catch(() => {});
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && "wakeLock" in navigator) {
-      navigator.wakeLock.request("screen").catch(() => {});
-    }
-  });
-
-  window.addEventListener("pageshow", connectSignaling);
-  window.addEventListener("online", connectSignaling);
-
-  connectSignaling();
-
+  connect();
 </script>
 </body>
 </html>
