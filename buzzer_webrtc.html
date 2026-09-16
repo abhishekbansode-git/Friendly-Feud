@@ -2,33 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1"
+  />
+
   <title>Buzzer</title>
+
   <style>
-    * { box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-    body { margin:0; height:100dvh; display:flex; flex-direction:column; padding:20px; background:radial-gradient(ellipse at top, #0f4c81 0%, #031533 60%, #010a1a 100%); color:#fff; font-family:sans-serif; }
-    .header { display:flex; justify-content:space-between; font-size:14px; opacity:0.8; font-family: monospace; color: #ffeb85; }
-    #team-title { font-size:40px; font-weight:900; text-align:center; margin:15px 0 5px 0; text-shadow: 0 4px 10px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 2px; }
-    #status-text { text-align:center; font-size:18px; margin-bottom:20px; color: #ffeb85; text-shadow: 0 2px 4px rgba(0,0,0,0.8); opacity: 0.9; }
-    
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      background:
+        radial-gradient(
+          ellipse at top,
+          #0f4c81 0%,
+          #031533 60%,
+          #010a1a 100%
+        );
+      color: #fff;
+      font-family: sans-serif;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      opacity: 0.8;
+      font-family: monospace;
+      color: #ffeb85;
+      flex-shrink: 0;
+    }
+
+    #team-title {
+      font-size: 40px;
+      font-weight: 900;
+      text-align: center;
+      margin: 15px 0 5px 0;
+      text-shadow: 0 4px 10px rgba(0, 0, 0, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      flex-shrink: 0;
+    }
+
+    #status-text {
+      text-align: center;
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #ffeb85;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+      opacity: 0.9;
+      min-height: 22px;
+      flex-shrink: 0;
+    }
+
     .wood-board {
       flex: 1;
+      min-height: 0;
       margin: 10px 0;
       border: 6px solid #ffd700;
       border-radius: 30px;
       background: #5c3a21;
-      background-image: 
+      background-image:
         repeating-linear-gradient(
           0deg,
           transparent,
           transparent 15px,
-          rgba(0,0,0,0.1) 15px,
-          rgba(0,0,0,0.1) 30px
+          rgba(0, 0, 0, 0.1) 15px,
+          rgba(0, 0, 0, 0.1) 30px
         ),
         linear-gradient(180deg, #6b4324, #2a170a);
-      box-shadow: 
+      box-shadow:
         0 0 30px rgba(255, 215, 0, 0.5),
-        inset 0 0 40px rgba(0,0,0,0.8);
+        inset 0 0 40px rgba(0, 0, 0, 0.8);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -39,495 +102,1816 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at center, rgba(255, 215, 0, 0.1) 0%, transparent 60%);
+      background:
+        radial-gradient(
+          circle at center,
+          rgba(255, 215, 0, 0.1) 0%,
+          transparent 60%
+        );
       width: 100%;
       height: 100%;
     }
 
     .podium {
       --size: min(80vw, 55vh, 300px);
+
       width: var(--size);
       height: var(--size);
+
       border-radius: 50%;
-      background: linear-gradient(135deg, #0d47a1, #0a1f44); /* Blue base */
-      box-shadow: 
-        0 30px 60px -15px rgba(0,0,0,1),
-        inset 0 4px 8px rgba(255,255,255,0.3),
-        inset 0 -5px 15px rgba(0,0,0,0.9);
+
+      background:
+        linear-gradient(
+          135deg,
+          #0d47a1,
+          #0a1f44
+        );
+
+      box-shadow:
+        0 30px 60px -15px rgba(0, 0, 0, 1),
+        inset 0 4px 8px rgba(255, 255, 255, 0.3),
+        inset 0 -5px 15px rgba(0, 0, 0, 0.9);
+
       display: flex;
       align-items: center;
       justify-content: center;
+
       border: 3px solid #06193b;
       position: relative;
     }
 
     .podium::after {
-      content: '';
+      content: "";
+
       position: absolute;
+
       width: calc(var(--size) - 20px);
       height: calc(var(--size) - 20px);
+
       border-radius: 50%;
-      background: linear-gradient(to bottom, #1565c0, #0a2656); /* Top of blue base */
-      box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
+
+      background:
+        linear-gradient(
+          to bottom,
+          #1565c0,
+          #0a2656
+        );
+
+      box-shadow:
+        inset 0 5px 15px rgba(0, 0, 0, 0.8);
+
       z-index: 1;
     }
 
     #buzz-btn {
       width: calc(var(--size) - 60px);
       height: calc(var(--size) - 60px);
+
       border-radius: 50%;
-      border: 2px solid rgba(0,0,0,0.5);
+
+      border: 2px solid rgba(0, 0, 0, 0.5);
+
       font-size: 32px;
       font-weight: 900;
-      color: rgba(255,255,255,0.5);
-      /* Dark unlit red */
-      background: radial-gradient(circle at 35% 35%, #b71c1c, #4a0404);
-      box-shadow: 
-        0 20px 30px rgba(0,0,0,0.9),
-        inset 0 -15px 25px rgba(0,0,0,0.7),
-        inset 0 10px 20px rgba(255,255,255,0.2);
-      transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
-      text-shadow: 0 -1px 2px rgba(0,0,0,0.8);
+
+      color: rgba(255, 255, 255, 0.5);
+
+      background:
+        radial-gradient(
+          circle at 35% 35%,
+          #b71c1c,
+          #4a0404
+        );
+
+      box-shadow:
+        0 20px 30px rgba(0, 0, 0, 0.9),
+        inset 0 -15px 25px rgba(0, 0, 0, 0.7),
+        inset 0 10px 20px rgba(255, 255, 255, 0.2);
+
+      transition:
+        all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+
+      text-shadow:
+        0 -1px 2px rgba(0, 0, 0, 0.8);
+
       position: relative;
+
       top: -10px;
+
       z-index: 2;
+
       outline: none;
+
+      -webkit-tap-highlight-color: transparent;
+
+      touch-action: manipulation;
     }
 
-    #buzz-btn.countdown { 
-      opacity: 0.9; 
-      background: radial-gradient(circle at 35% 35%, #fde047, #ca8a04); 
-      color: #000; 
-      font-size: 48px; 
-      box-shadow: 
-        0 15px 25px rgba(0,0,0,0.6),
+    #buzz-btn.countdown {
+      opacity: 0.9;
+
+      background:
+        radial-gradient(
+          circle at 35% 35%,
+          #fde047,
+          #ca8a04
+        );
+
+      color: #000;
+
+      font-size: 48px;
+
+      box-shadow:
+        0 15px 25px rgba(0, 0, 0, 0.6),
         0 0 50px #eab308,
-        inset 0 -15px 25px rgba(0,0,0,0.4),
-        inset 0 15px 25px rgba(255,255,255,0.5);
+        inset 0 -15px 25px rgba(0, 0, 0, 0.4),
+        inset 0 15px 25px rgba(255, 255, 255, 0.5);
     }
 
     #buzz-btn.armed {
       color: #fff;
-      /* Bright glowing red */
-      background: radial-gradient(circle at 35% 35%, #ff4d4d, #d32f2f);
-      box-shadow: 
-        0 15px 25px rgba(0,0,0,0.6),
+
+      background:
+        radial-gradient(
+          circle at 35% 35%,
+          #ff4d4d,
+          #d32f2f
+        );
+
+      box-shadow:
+        0 15px 25px rgba(0, 0, 0, 0.6),
         0 0 50px #ff0000,
-        inset 0 -15px 25px rgba(0,0,0,0.4),
-        inset 0 15px 25px rgba(255,255,255,0.6);
+        inset 0 -15px 25px rgba(0, 0, 0, 0.4),
+        inset 0 15px 25px rgba(255, 255, 255, 0.6);
+
       top: -10px;
+
       cursor: pointer;
     }
 
     #buzz-btn.armed:active {
-      top: 0px;
-      box-shadow: 
-        0 5px 10px rgba(0,0,0,0.8),
+      top: 0;
+
+      box-shadow:
+        0 5px 10px rgba(0, 0, 0, 0.8),
         0 0 60px #ff0000,
-        inset 0 -5px 15px rgba(0,0,0,0.6),
-        inset 0 5px 15px rgba(255,255,255,0.5);
+        inset 0 -5px 15px rgba(0, 0, 0, 0.6),
+        inset 0 5px 15px rgba(255, 255, 255, 0.5);
     }
 
     #buzz-btn.winner {
       color: #fff;
-      background: radial-gradient(circle at 35% 35%, #86efac, #22c55e) !important;
-      box-shadow: 
-        0 5px 10px rgba(0,0,0,0.8),
+
+      background:
+        radial-gradient(
+          circle at 35% 35%,
+          #86efac,
+          #22c55e
+        ) !important;
+
+      box-shadow:
+        0 5px 10px rgba(0, 0, 0, 0.8),
         0 0 100px #22c55e,
-        inset 0 -5px 15px rgba(0,0,0,0.6),
-        inset 0 5px 15px rgba(255,255,255,0.6) !important;
-      top: 0px;
+        inset 0 -5px 15px rgba(0, 0, 0, 0.6),
+        inset 0 5px 15px rgba(255, 255, 255, 0.6) !important;
+
+      top: 0;
+    }
+
+    #buzz-btn:disabled {
+      cursor: default;
+    }
+
+    @media (max-width: 500px) {
+      body {
+        padding: 12px;
+      }
+
+      #team-title {
+        font-size: 30px;
+        margin-top: 10px;
+      }
+
+      #status-text {
+        font-size: 16px;
+        margin-bottom: 10px;
+      }
+
+      .wood-board {
+        border-width: 4px;
+        border-radius: 22px;
+      }
     }
   </style>
 </head>
+
 <body>
+
   <div class="header">
-    <span>Room: <b id="room-lbl">-</b></span>
-    <span id="conn-lbl">Connecting...</span>
+    <span>
+      Room:
+      <b id="room-lbl">-</b>
+    </span>
+
+    <span id="conn-lbl">
+      Connecting...
+    </span>
   </div>
 
-  <div id="team-title">TEAM</div>
-  <div id="status-text">Connecting to host...</div>
+
+  <div id="team-title">
+    TEAM
+  </div>
+
+
+  <div id="status-text">
+    Connecting to host...
+  </div>
+
 
   <div class="wood-board">
+
     <div class="buzzer-container">
+
       <div class="podium">
-        <button id="buzz-btn" disabled>STANDBY</button>
+
+        <button
+          id="buzz-btn"
+          disabled
+          type="button"
+        >
+          STANDBY
+        </button>
+
       </div>
+
     </div>
+
   </div>
 
-<script>
-  const BACKEND_HOST = "feud-backend.feud-buzz-app.workers.dev";
-  const params = new URLSearchParams(window.location.search);
 
-  // If a room parameter is present in the URL, FORCE overwrite localStorage
-  let room = params.get("room");
-  let team = params.get("team");
-  let name = params.get("name");
-  let color = params.get("color");
-
-  if (room) {
-    room = room.toUpperCase();
-    localStorage.setItem("feud_room", room);
-    if (team !== null) localStorage.setItem("feud_team", team);
-    if (name) localStorage.setItem("feud_name", name);
-    if (color) localStorage.setItem("feud_color", color);
-  } else {
-    // Fall back to storage only if URL had no parameters
-    room = (localStorage.getItem("feud_room") || "").toUpperCase();
-    team = localStorage.getItem("feud_team") || "0";
-    name = localStorage.getItem("feud_name") || `Team ${parseInt(team) + 1}`;
-    color = localStorage.getItem("feud_color") || "#3b82f6";
-  }
-
-  // Guard: if no room anywhere, alert user
-  if (!room || room.length !== 4) {
-    document.getElementById("status-text").textContent = "Invalid or missing room code. Please scan QR again.";
-    document.getElementById("conn-lbl").textContent = "No Room";
-    throw new Error("Invalid room code");
-  }
-
-  // UI Setup
-  document.documentElement.style.setProperty("--team-color", color);
-  document.getElementById("room-lbl").textContent = room;
-  document.getElementById("team-title").textContent = name;
-  document.getElementById("team-title").style.color = color;
-
-  const btn = document.getElementById("buzz-btn");
-  const status = document.getElementById("status-text");
-  const connLbl = document.getElementById("conn-lbl");
-
-  // Keep screen awake
-  if ('wakeLock' in navigator) {
-    navigator.wakeLock.request('screen').catch(() => {});
-  }
-
-  <!-- WebRTC phone buzzer: Cloudflare is used only for signaling. -->
   <script>
-    const SIGNALING_HOST = "feud-backend.feud-buzz-app.workers.dev";
+
+    /* ============================================================
+       CONFIGURATION
+       ============================================================ */
+
+    const SIGNALING_HOST =
+      "feud-backend.feud-buzz-app.workers.dev";
+
+
     const RTC_CONFIG = {
+
       iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }
+
+        {
+          urls:
+            "stun:stun.l.google.com:19302"
+        },
+
+        {
+          urls:
+            "stun:stun1.l.google.com:19302"
+        }
+
       ]
+
     };
 
-    const params = new URLSearchParams(window.location.search);
 
-    let room = params.get("room");
-    let team = params.get("team");
-    let name = params.get("name");
-    let color = params.get("color");
+    /* ============================================================
+       URL PARAMETERS
+       ============================================================ */
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+
+    let room =
+      params.get("room");
+
+
+    let team =
+      params.get("team");
+
+
+    let name =
+      params.get("name");
+
+
+    let color =
+      params.get("color");
+
+
+    /* ============================================================
+       LOAD / SAVE PHONE SETTINGS
+       ============================================================ */
 
     if (room) {
-      room = room.toUpperCase();
-      localStorage.setItem("feud_room", room);
-      if (team !== null) localStorage.setItem("feud_team", team);
-      if (name) localStorage.setItem("feud_name", name);
-      if (color) localStorage.setItem("feud_color", color);
+
+      room =
+        room.toUpperCase();
+
+
+      localStorage.setItem(
+        "feud_room",
+        room
+      );
+
+
+      if (team !== null) {
+
+        localStorage.setItem(
+          "feud_team",
+          team
+        );
+
+      }
+
+
+      if (name) {
+
+        localStorage.setItem(
+          "feud_name",
+          name
+        );
+
+      }
+
+
+      if (color) {
+
+        localStorage.setItem(
+          "feud_color",
+          color
+        );
+
+      }
+
     } else {
-      room = (localStorage.getItem("feud_room") || "").toUpperCase();
-      team = localStorage.getItem("feud_team") || "0";
-      name = localStorage.getItem("feud_name") || `Team ${parseInt(team) + 1}`;
-      color = localStorage.getItem("feud_color") || "#3b82f6";
+
+      room =
+        (
+          localStorage.getItem(
+            "feud_room"
+          ) || ""
+        ).toUpperCase();
+
+
+      team =
+        localStorage.getItem(
+          "feud_team"
+        ) || "0";
+
+
+      name =
+        localStorage.getItem(
+          "feud_name"
+        ) ||
+        `Team ${parseInt(team) + 1}`;
+
+
+      color =
+        localStorage.getItem(
+          "feud_color"
+        ) ||
+        "#3b82f6";
+
     }
 
-    if (!room || room.length !== 4) {
-      document.getElementById("status-text").textContent = "Invalid or missing room code. Please scan QR again.";
-      document.getElementById("conn-lbl").textContent = "No Room";
-      throw new Error("Invalid room code");
+
+    /* ============================================================
+       VALIDATE ROOM
+       ============================================================ */
+
+    if (
+      !room ||
+      room.length !== 4
+    ) {
+
+      document
+        .getElementById(
+          "status-text"
+        )
+        .textContent =
+          "Invalid room. Please scan QR again.";
+
+
+      document
+        .getElementById(
+          "conn-lbl"
+        )
+        .textContent =
+          "No Room";
+
+
+      throw new Error(
+        "Invalid room code"
+      );
+
     }
 
-    team = Number(team);
-    if (team !== 0 && team !== 1) {
-      document.getElementById("status-text").textContent = "Invalid team. Please scan QR again.";
-      throw new Error("Invalid team");
+
+    team =
+      Number(team);
+
+
+    if (
+      team !== 0 &&
+      team !== 1
+    ) {
+
+      document
+        .getElementById(
+          "status-text"
+        )
+        .textContent =
+          "Invalid team. Please scan QR again.";
+
+
+      throw new Error(
+        "Invalid team"
+      );
+
     }
 
-    document.documentElement.style.setProperty("--team-color", color);
-    document.getElementById("room-lbl").textContent = room;
-    document.getElementById("team-title").textContent = name;
-    document.getElementById("team-title").style.color = color;
 
-    const btn = document.getElementById("buzz-btn");
-    const status = document.getElementById("status-text");
-    const connLbl = document.getElementById("conn-lbl");
+    /* ============================================================
+       UI REFERENCES
+       ============================================================ */
 
-    if ("wakeLock" in navigator) {
-      navigator.wakeLock.request("screen").catch(() => {});
+    const btn =
+      document.getElementById(
+        "buzz-btn"
+      );
+
+
+    const status =
+      document.getElementById(
+        "status-text"
+      );
+
+
+    const connLbl =
+      document.getElementById(
+        "conn-lbl"
+      );
+
+
+    const roomLbl =
+      document.getElementById(
+        "room-lbl"
+      );
+
+
+    const teamTitle =
+      document.getElementById(
+        "team-title"
+      );
+
+
+    roomLbl.textContent =
+      room;
+
+
+    teamTitle.textContent =
+      name ||
+      `TEAM ${team + 1}`;
+
+
+    teamTitle.style.color =
+      color ||
+      "#ffffff";
+
+
+    /* ============================================================
+       STATE
+       ============================================================ */
+
+    let signalingWs =
+      null;
+
+
+    let peer =
+      null;
+
+
+    let channel =
+      null;
+
+
+    let remoteDescriptionSet =
+      false;
+
+
+    let pendingCandidates =
+      [];
+
+
+    let reconnectTimer =
+      null;
+
+
+    let retryDelay =
+      1000;
+
+
+    const MAX_RETRY_DELAY =
+      15000;
+
+
+    let phoneArmed =
+      false;
+
+
+    let phoneBuzzed =
+      false;
+
+
+    /* ============================================================
+       PHONE UI
+       ============================================================ */
+
+    function setStandby(
+      message =
+        "Waiting for host..."
+    ) {
+
+      phoneArmed =
+        false;
+
+
+      phoneBuzzed =
+        false;
+
+
+      btn.disabled =
+        true;
+
+
+      btn.className =
+        "";
+
+
+      btn.textContent =
+        "STANDBY";
+
+
+      status.textContent =
+        message;
+
     }
 
-    let signalingWs = null;
-    let peer = null;
-    let channel = null;
-    let candidateQueue = [];
-    let remoteDescriptionSet = false;
-    let reconnectTimer = null;
-    let retryDelay = 1000;
-    const MAX_RETRY_DELAY = 15000;
-
-    let phoneArmed = false;
-    let phoneBuzzed = false;
-
-    function setStandby(text = "Waiting for host...") {
-      phoneArmed = false;
-      phoneBuzzed = false;
-      btn.disabled = true;
-      btn.className = "";
-      btn.textContent = "STANDBY";
-      status.textContent = text;
-    }
 
     function setArmed() {
-      phoneArmed = true;
-      phoneBuzzed = false;
-      btn.disabled = false;
-      btn.className = "armed";
-      btn.textContent = "BUZZ!";
-      status.textContent = "TAP NOW!";
-      navigator.vibrate?.([80, 40, 80]);
-    }
 
-    function setLocked(winnerTeam) {
-      phoneArmed = false;
-      btn.disabled = true;
-      btn.classList.remove("armed", "countdown");
-      if (Number(winnerTeam) === team) {
-        btn.classList.add("winner");
-        btn.textContent = "YOU BUZZED!";
-        status.textContent = "You got in first! Answer now.";
-        navigator.vibrate?.([100, 50, 100]);
-      } else {
-        btn.textContent = "LOCKED OUT";
-        status.textContent = "Other team buzzed first!";
+      phoneArmed =
+        true;
+
+
+      phoneBuzzed =
+        false;
+
+
+      btn.disabled =
+        false;
+
+
+      btn.className =
+        "armed";
+
+
+      btn.textContent =
+        "BUZZ!";
+
+
+      status.textContent =
+        "TAP NOW!";
+
+
+      if (
+        navigator.vibrate
+      ) {
+
+        navigator.vibrate(
+          [80, 40, 80]
+        );
+
       }
+
     }
 
-    function sendSignal(message) {
-      if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) return false;
-      signalingWs.send(JSON.stringify(message));
-      return true;
+
+    function setLocked(
+      winnerTeam
+    ) {
+
+      phoneArmed =
+        false;
+
+
+      btn.disabled =
+        true;
+
+
+      btn.classList.remove(
+        "armed",
+        "countdown"
+      );
+
+
+      /*
+       * If the host did not send a winner,
+       * simply lock the buzzer.
+       */
+
+      if (
+        winnerTeam === undefined ||
+        winnerTeam === null
+      ) {
+
+        btn.textContent =
+          "LOCKED";
+
+        status.textContent =
+          "Waiting for host...";
+
+        return;
+
+      }
+
+
+      if (
+        Number(winnerTeam) === team
+      ) {
+
+        btn.classList.add(
+          "winner"
+        );
+
+
+        btn.textContent =
+          "YOU BUZZED!";
+
+
+        status.textContent =
+          "You got in first!";
+
+
+        if (
+          navigator.vibrate
+        ) {
+
+          navigator.vibrate(
+            [100, 50, 100]
+          );
+
+        }
+
+      } else {
+
+        btn.textContent =
+          "LOCKED OUT";
+
+
+        status.textContent =
+          "Other team buzzed first!";
+
+      }
+
     }
+
+
+    /* ============================================================
+       SEND SIGNALING MESSAGE
+       ============================================================ */
+
+    function sendSignal(
+      data
+    ) {
+
+      if (
+        !signalingWs ||
+        signalingWs.readyState !==
+          WebSocket.OPEN
+      ) {
+
+        console.warn(
+          "[SIGNAL] WebSocket not open"
+        );
+
+        return false;
+
+      }
+
+
+      const message = {
+
+        type:
+          "SIGNAL",
+
+        team:
+          team,
+
+        data:
+          data
+
+      };
+
+
+      console.log(
+        "[SIGNAL] Sending:",
+        message
+      );
+
+
+      signalingWs.send(
+        JSON.stringify(
+          message
+        )
+      );
+
+
+      return true;
+
+    }
+
+
+    /* ============================================================
+       CLOSE WEBRTC
+       ============================================================ */
 
     function closePeer() {
-      candidateQueue = [];
-      remoteDescriptionSet = false;
+
+      remoteDescriptionSet =
+        false;
+
+
+      pendingCandidates =
+        [];
+
+
       if (channel) {
-        try { channel.close(); } catch (e) {}
+
+        try {
+
+          channel.close();
+
+        } catch (e) {}
+
       }
-      channel = null;
+
+
+      channel =
+        null;
+
+
       if (peer) {
-        try { peer.close(); } catch (e) {}
+
+        try {
+
+          peer.close();
+
+        } catch (e) {}
+
       }
-      peer = null;
+
+
+      peer =
+        null;
+
     }
+
+
+    /* ============================================================
+       CREATE PHONE PEER
+       ============================================================ */
 
     function createPhonePeer() {
+
+      console.log(
+        "[WEBRTC] Creating phone peer"
+      );
+
+
       closePeer();
 
-      peer = new RTCPeerConnection(RTC_CONFIG);
 
-      peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignal({
-            type: "SIGNAL",
-            team,
-            data: event.candidate
-          });
-        }
-      };
+      peer =
+        new RTCPeerConnection(
+          RTC_CONFIG
+        );
 
-      peer.onconnectionstatechange = () => {
-        console.log("Phone WebRTC state:", peer.connectionState);
 
-        if (peer.connectionState === "connected") {
-          connLbl.textContent = "WebRTC Connected";
-          connLbl.style.color = "#22c55e";
-          status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
-        } else if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
-          connLbl.textContent = "WebRTC Disconnected";
-          connLbl.style.color = "#ef4444";
-          if (!phoneArmed) status.textContent = "Reconnecting...";
-        }
-      };
+      /* ----------------------------------------------------------
+         LAPTOP CREATED THE DATA CHANNEL.
+         PHONE RECEIVES IT HERE.
+         ---------------------------------------------------------- */
 
-      peer.ondatachannel = (event) => {
-        channel = event.channel;
-        channel.onopen = () => {
-          connLbl.textContent = "WebRTC Connected";
-          connLbl.style.color = "#22c55e";
-          status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+      peer.ondatachannel =
+        function(event) {
+
+          console.log(
+            "[WEBRTC] DataChannel received"
+          );
+
+
+          channel =
+            event.channel;
+
+
+          channel.onopen =
+            function() {
+
+              console.log(
+                "[WEBRTC] DataChannel OPEN"
+              );
+
+
+              connLbl.textContent =
+                "WebRTC Connected";
+
+
+              connLbl.style.color =
+                "#22c55e";
+
+
+              if (phoneArmed) {
+
+                status.textContent =
+                  "TAP NOW!";
+
+              } else {
+
+                status.textContent =
+                  "Waiting for next question...";
+
+              }
+
+            };
+
+
+          channel.onmessage =
+            function(event) {
+
+              handleGameMessage(
+                event.data
+              );
+
+            };
+
+
+          channel.onclose =
+            function() {
+
+              console.log(
+                "[WEBRTC] DataChannel CLOSED"
+              );
+
+
+              channel =
+                null;
+
+
+              if (!phoneArmed) {
+
+                connLbl.textContent =
+                  "WebRTC Disconnected";
+
+
+                connLbl.style.color =
+                  "#ef4444";
+
+
+                status.textContent =
+                  "Reconnecting...";
+
+              }
+
+            };
+
+
+          channel.onerror =
+            function(error) {
+
+              console.error(
+                "[WEBRTC] DataChannel error:",
+                error
+              );
+
+            };
+
         };
 
-        channel.onmessage = (event) => handleGameMessage(event.data);
 
-        channel.onclose = () => {
-          channel = null;
-          if (!phoneArmed) {
-            connLbl.textContent = "WebRTC Disconnected";
-            connLbl.style.color = "#ef4444";
-            status.textContent = "Reconnecting...";
+      /* ----------------------------------------------------------
+         ICE CANDIDATES
+         ---------------------------------------------------------- */
+
+      peer.onicecandidate =
+        function(event) {
+
+          if (
+            !event.candidate
+          ) {
+
+            return;
+
           }
+
+
+          sendSignal({
+
+            type:
+              "candidate",
+
+            candidate:
+              event.candidate
+
+          });
+
         };
-      };
+
+
+      /* ----------------------------------------------------------
+         CONNECTION STATE
+         ---------------------------------------------------------- */
+
+      peer.onconnectionstatechange =
+        function() {
+
+          console.log(
+            "[WEBRTC] Connection state:",
+            peer.connectionState
+          );
+
+
+          if (
+            peer.connectionState ===
+            "connected"
+          ) {
+
+            connLbl.textContent =
+              "WebRTC Connected";
+
+
+            connLbl.style.color =
+              "#22c55e";
+
+
+            status.textContent =
+              phoneArmed
+                ? "TAP NOW!"
+                : "Waiting for next question...";
+
+          }
+
+
+          if (
+            peer.connectionState ===
+              "failed" ||
+            peer.connectionState ===
+              "disconnected"
+          ) {
+
+            connLbl.textContent =
+              "WebRTC Disconnected";
+
+
+            connLbl.style.color =
+              "#ef4444";
+
+
+            if (!phoneArmed) {
+
+              status.textContent =
+                "Reconnecting...";
+
+            }
+
+          }
+
+        };
+
     }
+
+
+    /* ============================================================
+       ADD ICE CANDIDATE
+       ============================================================ */
+
+    async function addRemoteCandidate(
+      candidate
+    ) {
+
+      if (!peer) {
+
+        return;
+
+      }
+
+
+      /*
+       * ICE can arrive before the offer.
+       * Queue it until remote description exists.
+       */
+
+      if (
+        !remoteDescriptionSet
+      ) {
+
+        pendingCandidates.push(
+          candidate
+        );
+
+        return;
+
+      }
+
+
+      try {
+
+        await peer.addIceCandidate(
+          new RTCIceCandidate(
+            candidate
+          )
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "[WEBRTC] ICE candidate error:",
+          error
+        );
+
+      }
+
+    }
+
+
+    /* ============================================================
+       FLUSH ICE QUEUE
+       ============================================================ */
 
     async function flushCandidateQueue() {
-      if (!peer || !remoteDescriptionSet) return;
-      for (const candidate of candidateQueue) {
-        try { await peer.addIceCandidate(candidate); } catch (e) {
-          console.warn("ICE candidate failed:", e);
-        }
+
+      if (
+        !peer ||
+        !remoteDescriptionSet
+      ) {
+
+        return;
+
       }
-      candidateQueue = [];
+
+
+      for (
+        const candidate
+        of pendingCandidates
+      ) {
+
+        try {
+
+          await peer.addIceCandidate(
+            new RTCIceCandidate(
+              candidate
+            )
+          );
+
+        } catch (error) {
+
+          console.warn(
+            "[WEBRTC] Queued ICE failed:",
+            error
+          );
+
+        }
+
+      }
+
+
+      pendingCandidates =
+        [];
+
     }
 
-    async function handleSignal(msg) {
-      if (msg.type === "SIGNAL" && msg.data) {
-        if (!peer) createPhonePeer();
 
-        if (msg.data.type === "offer") {
-          await peer.setRemoteDescription(msg.data);
-          remoteDescriptionSet = true;
+    /* ============================================================
+       HANDLE CLOUDFLARE SIGNAL
+       ============================================================ */
+
+    async function handleSignalMessage(
+      msg
+    ) {
+
+      console.log(
+        "[SIGNAL] Received:",
+        msg
+      );
+
+
+      /*
+       * We only process SIGNAL messages
+       * belonging to our team.
+       */
+
+      if (
+        msg.type ===
+          "SIGNAL"
+      ) {
+
+        if (
+          Number(msg.team) !==
+          team
+        ) {
+
+          return;
+
+        }
+
+
+        if (!msg.data) {
+
+          return;
+
+        }
+
+
+        const data =
+          msg.data;
+
+
+        if (!peer) {
+
+          createPhonePeer();
+
+        }
+
+
+        /* --------------------------------------------------------
+           OFFER FROM LAPTOP
+           -------------------------------------------------------- */
+
+        if (
+          data.type ===
+          "offer"
+        ) {
+
+          console.log(
+            "[WEBRTC] Offer received"
+          );
+
+
+          await peer.setRemoteDescription(
+            new RTCSessionDescription(
+              data.offer
+            )
+          );
+
+
+          remoteDescriptionSet =
+            true;
+
+
           await flushCandidateQueue();
 
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
+
+          /*
+           * Create answer.
+           */
+
+          const answer =
+            await peer.createAnswer();
+
+
+          await peer.setLocalDescription(
+            answer
+          );
+
+
+          console.log(
+            "[WEBRTC] Sending answer"
+          );
+
 
           sendSignal({
-            type: "SIGNAL",
-            team,
-            data: peer.localDescription
+
+            type:
+              "answer",
+
+            answer:
+              peer.localDescription
+
           });
+
+
           return;
+
         }
 
-        if (msg.data.candidate) {
-          if (remoteDescriptionSet) {
-            try { await peer.addIceCandidate(msg.data); } catch (e) {
-              console.warn("ICE candidate failed:", e);
-            }
-          } else {
-            candidateQueue.push(msg.data);
-          }
+
+        /* --------------------------------------------------------
+           ICE FROM LAPTOP
+           -------------------------------------------------------- */
+
+        if (
+          data.type ===
+            "candidate" &&
+          data.candidate
+        ) {
+
+          await addRemoteCandidate(
+            data.candidate
+          );
+
+          return;
+
         }
+
       }
 
-      if (msg.type === "ROOM_STATE") {
-        const connected = (msg.connectedTeams || []).map(Number);
-        if (connected.includes(team) && channel?.readyState === "open") {
-          connLbl.textContent = "WebRTC Connected";
-          connLbl.style.color = "#22c55e";
-        }
+
+      /*
+       * Optional ROOM_STATE message.
+       */
+
+      if (
+        msg.type ===
+        "ROOM_STATE"
+      ) {
+
+        console.log(
+          "[ROOM] State:",
+          msg
+        );
+
       }
+
     }
 
-    function connectSignaling() {
-      if (signalingWs && (signalingWs.readyState === WebSocket.OPEN || signalingWs.readyState === WebSocket.CONNECTING)) {
-        return;
-      }
 
-      clearTimeout(reconnectTimer);
-      connLbl.textContent = "Connecting...";
-      connLbl.style.color = "";
+    /* ============================================================
+       GAME MESSAGE FROM LAPTOP
+       ============================================================ */
 
-      signalingWs = new WebSocket(`wss://${SIGNALING_HOST}/?room=${encodeURIComponent(room)}`);
+    function handleGameMessage(
+      rawMessage
+    ) {
 
-      signalingWs.onopen = () => {
-        retryDelay = 1000;
-        connLbl.textContent = "Signaling Connected";
-        status.textContent = "Connecting buzzer...";
-
-        sendSignal({
-          type: "REGISTER_PHONE",
-          team,
-          name
-        });
-
-        // Create the peer immediately. The host's offer may arrive right away.
-        createPhonePeer();
-      };
-
-      signalingWs.onmessage = async (event) => {
-        try {
-          await handleSignal(JSON.parse(event.data));
-        } catch (err) {
-          console.error("Signaling message error:", err);
-        }
-      };
-
-      signalingWs.onerror = (err) => {
-        console.error("Signaling error:", err);
-        connLbl.textContent = "Signaling Error";
-        connLbl.style.color = "#ef4444";
-      };
-
-      signalingWs.onclose = () => {
-        closePeer();
-        connLbl.textContent = "Offline";
-        connLbl.style.color = "#ef4444";
-        if (!phoneArmed) status.textContent = `Reconnecting in ${(retryDelay / 1000).toFixed(0)}s...`;
-
-        clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(connectSignaling, retryDelay);
-        retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
-      };
-    }
-
-    function handleGameMessage(raw) {
       let msg;
-      try { msg = JSON.parse(raw); } catch (e) { return; }
 
-      if (msg.type === "ARM") {
+
+      try {
+
+        msg =
+          JSON.parse(
+            rawMessage
+          );
+
+      } catch (error) {
+
+        console.warn(
+          "[GAME] Invalid message:",
+          rawMessage
+        );
+
+        return;
+
+      }
+
+
+      console.log(
+        "[GAME] Received:",
+        msg
+      );
+
+
+      /* ----------------------------------------------------------
+         ARM
+         ---------------------------------------------------------- */
+
+      if (
+        msg.type ===
+        "ARM"
+      ) {
+
         setArmed();
+
         return;
+
       }
 
-      if (msg.type === "LOCK") {
-        setLocked(msg.winner?.team);
+
+      /* ----------------------------------------------------------
+         LOCK
+         ---------------------------------------------------------- */
+
+      if (
+        msg.type ===
+        "LOCK"
+      ) {
+
+        setLocked(
+          msg.winner?.team
+        );
+
         return;
+
       }
 
-      if (msg.type === "RESET") {
-        setStandby("Waiting for next question...");
+
+      /* ----------------------------------------------------------
+         RESET
+         ---------------------------------------------------------- */
+
+      if (
+        msg.type ===
+        "RESET"
+      ) {
+
+        setStandby(
+          "Waiting for next question..."
+        );
+
         return;
+
       }
+
     }
+
+
+    /* ============================================================
+       BUZZ
+       ============================================================ */
 
     function buzz() {
-      if (!phoneArmed || phoneBuzzed) return;
-      if (!channel || channel.readyState !== "open") return;
 
-      phoneBuzzed = true;
-      phoneArmed = false;
+      /*
+       * Must be armed.
+       */
 
-      // Send BUZZ directly to the laptop over WebRTC.
-      channel.send(JSON.stringify({
-        type: "BUZZ",
-        team,
-        at: performance.now()
-      }));
+      if (
+        !phoneArmed
+      ) {
+
+        return;
+
+      }
+
+
+      /*
+       * Prevent multiple taps.
+       */
+
+      if (
+        phoneBuzzed
+      ) {
+
+        return;
+
+      }
+
+
+      /*
+       * Must have direct WebRTC connection.
+       */
+
+      if (
+        !channel ||
+        channel.readyState !==
+          "open"
+      ) {
+
+        console.warn(
+          "[BUZZ] WebRTC channel not open"
+        );
+
+        return;
+
+      }
+
+
+      phoneBuzzed =
+        true;
+
+
+      phoneArmed =
+        false;
+
+
+      /*
+       * IMPORTANT:
+       *
+       * This message does NOT go to Cloudflare.
+       *
+       * PHONE
+       *   ↓
+       * WebRTC DataChannel
+       *   ↓
+       * LAPTOP
+       */
+
+      const message = {
+
+        type:
+          "BUZZ",
+
+        team:
+          team,
+
+        timestamp:
+          Date.now()
+
+      };
+
+
+      console.log(
+        "[BUZZ] Sending:",
+        message
+      );
+
+
+      channel.send(
+        JSON.stringify(
+          message
+        )
+      );
+
+
+      btn.disabled =
+        true;
+
+
+      btn.textContent =
+        "BUZZED!";
+
+
+      status.textContent =
+        "Waiting for host...";
+
     }
 
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      buzz();
-    });
 
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        connectSignaling();
-        if ("wakeLock" in navigator) {
-          navigator.wakeLock.request("screen").catch(() => {});
-        }
+    /* ============================================================
+       BUTTON EVENTS
+       ============================================================ */
+
+    btn.addEventListener(
+      "pointerdown",
+      function(event) {
+
+        event.preventDefault();
+
+        buzz();
+
+      },
+      {
+        passive: false
       }
-    });
+    );
 
-    window.addEventListener("pageshow", connectSignaling);
-    window.addEventListener("online", connectSignaling);
 
-    setStandby();
+    btn.addEventListener(
+      "touchstart",
+      function(event) {
+
+        event.preventDefault();
+
+      },
+      {
+        passive: false
+      }
+    );
+
+
+    /* ============================================================
+       CONNECT TO CLOUDFLARE SIGNALING
+       ============================================================ */
+
+    function connectSignaling() {
+
+      if (
+        signalingWs &&
+        (
+          signalingWs.readyState ===
+            WebSocket.OPEN ||
+          signalingWs.readyState ===
+            WebSocket.CONNECTING
+        )
+      ) {
+
+        return;
+
+      }
+
+
+      clearTimeout(
+        reconnectTimer
+      );
+
+
+      connLbl.textContent =
+        "Connecting...";
+
+
+      connLbl.style.color =
+        "";
+
+
+      status.textContent =
+        "Connecting to host...";
+
+
+      console.log(
+        "[SIGNAL] Connecting to room:",
+        room
+      );
+
+
+      signalingWs =
+        new WebSocket(
+          `wss://${SIGNALING_HOST}/?room=${encodeURIComponent(room)}`
+        );
+
+
+      /* ----------------------------------------------------------
+         CONNECTED TO CLOUDFLARE
+         ---------------------------------------------------------- */
+
+      signalingWs.onopen =
+        function() {
+
+          console.log(
+            "[SIGNAL] Connected to Cloudflare"
+          );
+
+
+          retryDelay =
+            1000;
+
+
+          connLbl.textContent =
+            "Signaling Connected";
+
+
+          connLbl.style.color =
+            "#22c55e";
+
+
+          status.textContent =
+            "Connecting buzzer...";
+
+
+          /*
+           * Tell Worker:
+           *
+           * "This phone is Team 1/Team 2."
+           */
+
+          signalingWs.send(
+            JSON.stringify({
+
+              type:
+                "REGISTER_PHONE",
+
+              team:
+                team,
+
+              name:
+                name
+
+            })
+          );
+
+
+          console.log(
+            "[SIGNAL] Registered Team",
+            team + 1
+          );
+
+
+          /*
+           * Prepare WebRTC before offer arrives.
+           */
+
+          createPhonePeer();
+
+        };
+
+
+      /* ----------------------------------------------------------
+         SIGNALING MESSAGE
+         ---------------------------------------------------------- */
+
+      signalingWs.onmessage =
+        async function(event) {
+
+          try {
+
+            const msg =
+              JSON.parse(
+                event.data
+              );
+
+
+            await handleSignalMessage(
+              msg
+            );
+
+          } catch (error) {
+
+            console.error(
+              "[SIGNAL] Message error:",
+              error
+            );
+
+          }
+
+        };
+
+
+      /* ----------------------------------------------------------
+         ERROR
+         ---------------------------------------------------------- */
+
+      signalingWs.onerror =
+        function(error) {
+
+          console.error(
+            "[SIGNAL] WebSocket error:",
+            error
+          );
+
+
+          connLbl.textContent =
+            "Signaling Error";
+
+
+          connLbl.style.color =
+            "#ef4444";
+
+        };
+
+
+      /* ----------------------------------------------------------
+         CLOSED
+         ---------------------------------------------------------- */
+
+      signalingWs.onclose =
+        function() {
+
+          console.log(
+            "[SIGNAL] Disconnected"
+          );
+
+
+          closePeer();
+
+
+          connLbl.textContent =
+            "Offline";
+
+
+          connLbl.style.color =
+            "#ef4444";
+
+
+          if (!phoneArmed) {
+
+            status.textContent =
+              "Reconnecting...";
+
+          }
+
+
+          clearTimeout(
+            reconnectTimer
+          );
+
+
+          reconnectTimer =
+            setTimeout(
+              connectSignaling,
+              retryDelay
+            );
+
+
+          retryDelay =
+            Math.min(
+              retryDelay * 2,
+              MAX_RETRY_DELAY
+            );
+
+        };
+
+    }
+
+
+    /* ============================================================
+       PAGE / NETWORK RECOVERY
+       ============================================================ */
+
+    window.addEventListener(
+      "online",
+      function() {
+
+        connectSignaling();
+
+      }
+    );
+
+
+    window.addEventListener(
+      "pageshow",
+      function() {
+
+        connectSignaling();
+
+      }
+    );
+
+
+    document.addEventListener(
+      "visibilitychange",
+      function() {
+
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+
+          connectSignaling();
+
+
+          if (
+            "wakeLock" in
+            navigator
+          ) {
+
+            navigator.wakeLock
+              .request(
+                "screen"
+              )
+              .catch(
+                () => {}
+              );
+
+          }
+
+        }
+
+      }
+    );
+
+
+    /* ============================================================
+       KEEP SCREEN AWAKE
+       ============================================================ */
+
+    async function keepScreenAwake() {
+
+      if (
+        "wakeLock" in
+        navigator
+      ) {
+
+        try {
+
+          await navigator.wakeLock
+            .request(
+              "screen"
+            );
+
+        } catch (error) {
+
+          console.log(
+            "[WAKELOCK] Not available"
+          );
+
+        }
+
+      }
+
+    }
+
+
+    /* ============================================================
+       INITIAL STATE
+       ============================================================ */
+
+    setStandby(
+      "Connecting to host..."
+    );
+
+
+    keepScreenAwake();
+
+
     connectSignaling();
+
   </script>
+
 </body>
 </html>
