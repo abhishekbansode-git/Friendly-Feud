@@ -269,9 +269,19 @@
     peer = null;
   }
 
-  function createPhonePeer() {
+  async function createPhonePeer() {
     closePeer();
-    peer = new RTCPeerConnection(RTC_CONFIG);
+    const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
+
+    if (!turnResponse.ok) {
+      throw new Error(`TURN credentials failed: ${turnResponse.status}`);
+    }
+
+    const turnData = await turnResponse.json();
+
+    peer = new RTCPeerConnection({
+      iceServers: turnData.iceServers
+    });
 
     peer.onicecandidate = (event) => {
       if (event.candidate) {
