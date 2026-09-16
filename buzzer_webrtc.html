@@ -278,7 +278,22 @@
         sendSignal({ type: "candidate", candidate: event.candidate });
       }
     };
+peer.oniceconnectionstatechange = () => {
+    console.log("Phone ICE state:", peer.iceConnectionState);
+};
 
+peer.onicegatheringstatechange = () => {
+    console.log("Phone ICE gathering:", peer.iceGatheringState);
+};
+
+peer.onicecandidateerror = (event) => {
+    console.error(
+        "Phone ICE candidate ERROR:",
+        event.errorCode,
+        event.url,
+        event.errorText
+    );
+};
     peer.onconnectionstatechange = () => {
       if (!peer) return;
       console.log("Phone WebRTC state:", peer.connectionState);
