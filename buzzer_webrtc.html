@@ -388,7 +388,7 @@ peer.onicecandidateerror = (event) => {
       return;
     }
     if (msg.type === "LOCK") {
-      setLocked(msg.winner?.team);
+      setLocked(msg.winnerTeam);
       return;
     }
     if (msg.type === "RESET") {
