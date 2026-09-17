@@ -4,56 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Buzzer</title>
-
   <style>
     * { box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-
-    body {
-      margin:0;
-      height:100dvh;
-      display:flex;
-      flex-direction:column;
-      padding:20px;
-      background:radial-gradient(ellipse at top, #0f4c81 0%, #031533 60%, #010a1a 100%);
-      color:#fff;
-      font-family:sans-serif;
-    }
-
-    .header {
-      display:flex;
-      justify-content:space-between;
-      font-size:14px;
-      opacity:0.8;
-      font-family:monospace;
-      color:#ffeb85;
-    }
-
-    #team-title {
-      font-size:40px;
-      font-weight:900;
-      text-align:center;
-      margin:15px 0 5px 0;
-      text-shadow:0 4px 10px rgba(0,0,0,0.8);
-      text-transform:uppercase;
-      letter-spacing:2px;
-    }
-
-    #status-text {
-      text-align:center;
-      font-size:18px;
-      margin-bottom:20px;
-      color:#ffeb85;
-      text-shadow:0 2px 4px rgba(0,0,0,0.8);
-      opacity:0.9;
-    }
-
+    body { margin:0; height:100dvh; display:flex; flex-direction:column; padding:20px; background:radial-gradient(ellipse at top, #0f4c81 0%, #031533 60%, #010a1a 100%); color:#fff; font-family:sans-serif; }
+    .header { display:flex; justify-content:space-between; font-size:14px; opacity:0.8; font-family: monospace; color: #ffeb85; }
+    #team-title { font-size:40px; font-weight:900; text-align:center; margin:15px 0 5px 0; text-shadow: 0 4px 10px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 2px; }
+    #status-text { text-align:center; font-size:18px; margin-bottom:20px; color: #ffeb85; text-shadow: 0 2px 4px rgba(0,0,0,0.8); opacity: 0.9; }
+    
     .wood-board {
-      flex:1;
-      margin:10px 0;
-      border:6px solid #ffd700;
-      border-radius:30px;
-      background:#5c3a21;
-      background-image:
+      flex: 1;
+      margin: 10px 0;
+      border: 6px solid #ffd700;
+      border-radius: 30px;
+      background: #5c3a21;
+      background-image: 
         repeating-linear-gradient(
           0deg,
           transparent,
@@ -62,87 +26,80 @@
           rgba(0,0,0,0.1) 30px
         ),
         linear-gradient(180deg, #6b4324, #2a170a);
-      box-shadow:
-        0 0 30px rgba(255,215,0,0.5),
+      box-shadow: 
+        0 0 30px rgba(255, 215, 0, 0.5),
         inset 0 0 40px rgba(0,0,0,0.8);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      position:relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
     }
 
     .buzzer-container {
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:radial-gradient(
-        circle at center,
-        rgba(255,215,0,0.1) 0%,
-        transparent 60%
-      );
-      width:100%;
-      height:100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(255, 215, 0, 0.1) 0%, transparent 60%);
+      width: 100%;
+      height: 100%;
     }
 
     .podium {
-      --size:min(80vw,55vh,300px);
-      width:var(--size);
-      height:var(--size);
-      border-radius:50%;
-      background:linear-gradient(135deg,#0d47a1,#0a1f44);
-      box-shadow:
+      --size: min(80vw, 55vh, 300px);
+      width: var(--size);
+      height: var(--size);
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0d47a1, #0a1f44); /* Blue base */
+      box-shadow: 
         0 30px 60px -15px rgba(0,0,0,1),
         inset 0 4px 8px rgba(255,255,255,0.3),
         inset 0 -5px 15px rgba(0,0,0,0.9);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border:3px solid #06193b;
-      position:relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #06193b;
+      position: relative;
     }
 
     .podium::after {
-      content:'';
-      position:absolute;
-      width:calc(var(--size) - 20px);
-      height:calc(var(--size) - 20px);
-      border-radius:50%;
-      background:linear-gradient(to bottom,#1565c0,#0a2656);
-      box-shadow:inset 0 5px 15px rgba(0,0,0,0.8);
-      z-index:1;
+      content: '';
+      position: absolute;
+      width: calc(var(--size) - 20px);
+      height: calc(var(--size) - 20px);
+      border-radius: 50%;
+      background: linear-gradient(to bottom, #1565c0, #0a2656); /* Top of blue base */
+      box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
+      z-index: 1;
     }
 
     #buzz-btn {
-      width:calc(var(--size) - 60px);
-      height:calc(var(--size) - 60px);
-      border-radius:50%;
-      border:2px solid rgba(0,0,0,0.5);
-      font-size:32px;
-      font-weight:900;
-      color:rgba(255,255,255,0.5);
-      background:radial-gradient(
-        circle at 35% 35%,
-        #b71c1c,
-        #4a0404
-      );
-      box-shadow:
+      width: calc(var(--size) - 60px);
+      height: calc(var(--size) - 60px);
+      border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.5);
+      font-size: 32px;
+      font-weight: 900;
+      color: rgba(255,255,255,0.5);
+      /* Dark unlit red */
+      background: radial-gradient(circle at 35% 35%, #b71c1c, #4a0404);
+      box-shadow: 
         0 20px 30px rgba(0,0,0,0.9),
         inset 0 -15px 25px rgba(0,0,0,0.7),
         inset 0 10px 20px rgba(255,255,255,0.2);
-      transition:all 0.1s cubic-bezier(0.4,0,0.2,1);
-      text-shadow:0 -1px 2px rgba(0,0,0,0.8);
-      position:relative;
-      top:-10px;
-      z-index:2;
-      outline:none;
+      transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+      text-shadow: 0 -1px 2px rgba(0,0,0,0.8);
+      position: relative;
+      top: -10px;
+      z-index: 2;
+      outline: none;
     }
 
-    #buzz-btn.countdown {
-      opacity:0.9;
-      background:radial-gradient(circle at 35% 35%,#fde047,#ca8a04);
-      color:#000;
-      font-size:48px;
-      box-shadow:
+    #buzz-btn.countdown { 
+      opacity: 0.9; 
+      background: radial-gradient(circle at 35% 35%, #fde047, #ca8a04); 
+      color: #000; 
+      font-size: 48px; 
+      box-shadow: 
         0 15px 25px rgba(0,0,0,0.6),
         0 0 50px #eab308,
         inset 0 -15px 25px rgba(0,0,0,0.4),
@@ -150,20 +107,21 @@
     }
 
     #buzz-btn.armed {
-      color:#fff;
-      background:radial-gradient(circle at 35% 35%,#ff4d4d,#d32f2f);
-      box-shadow:
+      color: #fff;
+      /* Bright glowing red */
+      background: radial-gradient(circle at 35% 35%, #ff4d4d, #d32f2f);
+      box-shadow: 
         0 15px 25px rgba(0,0,0,0.6),
         0 0 50px #ff0000,
         inset 0 -15px 25px rgba(0,0,0,0.4),
         inset 0 15px 25px rgba(255,255,255,0.6);
-      top:-10px;
-      cursor:pointer;
+      top: -10px;
+      cursor: pointer;
     }
 
     #buzz-btn.armed:active {
-      top:0px;
-      box-shadow:
+      top: 0px;
+      box-shadow: 
         0 5px 10px rgba(0,0,0,0.8),
         0 0 60px #ff0000,
         inset 0 -5px 15px rgba(0,0,0,0.6),
@@ -171,1479 +129,399 @@
     }
 
     #buzz-btn.winner {
-      color:#fff;
-      background:radial-gradient(
-        circle at 35% 35%,
-        #86efac,
-        #22c55e
-      ) !important;
-      box-shadow:
+      color: #fff;
+      background: radial-gradient(circle at 35% 35%, #86efac, #22c55e) !important;
+      box-shadow: 
         0 5px 10px rgba(0,0,0,0.8),
         0 0 100px #22c55e,
         inset 0 -5px 15px rgba(0,0,0,0.6),
         inset 0 5px 15px rgba(255,255,255,0.6) !important;
-      top:0px;
+      top: 0px;
     }
   </style>
 </head>
-
 <body>
-
   <div class="header">
     <span>Room: <b id="room-lbl">-</b></span>
     <span id="conn-lbl">Connecting...</span>
   </div>
 
   <div id="team-title">TEAM</div>
-
-  <div id="status-text">
-    Connecting to host...
-  </div>
+  <div id="status-text">Connecting to host...</div>
 
   <div class="wood-board">
     <div class="buzzer-container">
       <div class="podium">
-        <button id="buzz-btn" disabled>
-          STANDBY
-        </button>
+        <button id="buzz-btn" disabled>STANDBY</button>
       </div>
     </div>
   </div>
 
-
 <script>
-
-  /*
-   * ============================================================
-   * CONFIG
-   * ============================================================
-   */
-
-  const SIGNALING_HOST =
-    "friendly-feud-signaling.friendlyfeud.workers.dev";
-
-
+  const SIGNALING_HOST = "friendly-feud-signaling.friendlyfeud.workers.dev";
   const RTC_CONFIG = {
     iceServers: [
-      {
-        urls:
-          "stun:stun.l.google.com:19302"
-      },
-      {
-        urls:
-          "stun:stun1.l.google.com:19302"
-      }
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" }
     ]
   };
 
-
-  /*
-   * ============================================================
-   * URL PARAMETERS
-   * ============================================================
-   */
-
-  const params =
-    new URLSearchParams(
-      window.location.search
-    );
-
-
-  let room =
-    params.get("room");
-
-  let team =
-    params.get("team");
-
-  let name =
-    params.get("name");
-
-  let color =
-    params.get("color");
-
-
-  /*
-   * ============================================================
-   * LOCAL STORAGE
-   * ============================================================
-   */
+  const params = new URLSearchParams(window.location.search);
+  let room = params.get("room");
+  let team = params.get("team");
+  let name = params.get("name");
+  let color = params.get("color");
 
   if (room) {
-
-    room =
-      room.toUpperCase();
-
-    localStorage.setItem(
-      "feud_room",
-      room
-    );
-
-    if (team !== null) {
-      localStorage.setItem(
-        "feud_team",
-        team
-      );
-    }
-
-    if (name) {
-      localStorage.setItem(
-        "feud_name",
-        name
-      );
-    }
-
-    if (color) {
-      localStorage.setItem(
-        "feud_color",
-        color
-      );
-    }
-
+    room = room.toUpperCase();
+    localStorage.setItem("feud_room", room);
+    if (team !== null) localStorage.setItem("feud_team", team);
+    if (name) localStorage.setItem("feud_name", name);
+    if (color) localStorage.setItem("feud_color", color);
   } else {
-
-    room =
-      (
-        localStorage.getItem(
-          "feud_room"
-        ) || ""
-      ).toUpperCase();
-
-    team =
-      localStorage.getItem(
-        "feud_team"
-      ) || "0";
-
-    name =
-      localStorage.getItem(
-        "feud_name"
-      ) ||
-      "Team " +
-      (
-        parseInt(team,10) + 1
-      );
-
-    color =
-      localStorage.getItem(
-        "feud_color"
-      ) ||
-      "#3b82f6";
+    room = (localStorage.getItem("feud_room") || "").toUpperCase();
+    team = localStorage.getItem("feud_team") || "0";
+    name = localStorage.getItem("feud_name") || "Team " + (parseInt(team, 10) + 1);
+    color = localStorage.getItem("feud_color") || "#3b82f6";
   }
 
+  team = Number(team);
 
-  team =
-    Number(team);
-
-
-  /*
-   * ============================================================
-   * VALIDATION
-   * ============================================================
-   */
-
-  if (
-    !room ||
-    room.length !== 4 ||
-    (team !== 0 && team !== 1)
-  ) {
-
-    document.getElementById(
-      "status-text"
-    ).textContent =
-      "Invalid room or team. Please scan QR again.";
-
-    document.getElementById(
-      "conn-lbl"
-    ).textContent =
-      "Invalid";
-
-    throw new Error(
-      "Invalid room/team"
-    );
+  if (!room || room.length !== 4 || (team !== 0 && team !== 1)) {
+    document.getElementById("status-text").textContent = "Invalid room or team. Please scan QR again.";
+    document.getElementById("conn-lbl").textContent = "Invalid";
+    throw new Error("Invalid room/team");
   }
 
+  document.documentElement.style.setProperty("--team-color", color);
+  document.getElementById("room-lbl").textContent = room;
+  document.getElementById("team-title").textContent = name;
+  document.getElementById("team-title").style.color = color;
 
-  /*
-   * ============================================================
-   * UI
-   * ============================================================
-   */
-
-  document.documentElement.style.setProperty(
-    "--team-color",
-    color
-  );
-
-
-  document.getElementById(
-    "room-lbl"
-  ).textContent =
-    room;
-
-
-  document.getElementById(
-    "team-title"
-  ).textContent =
-    name;
-
-
-  document.getElementById(
-    "team-title"
-  ).style.color =
-    color;
-
-
-  const btn =
-    document.getElementById(
-      "buzz-btn"
-    );
-
-  const status =
-    document.getElementById(
-      "status-text"
-    );
-
-  const connLbl =
-    document.getElementById(
-      "conn-lbl"
-    );
-
-
-  /*
-   * ============================================================
-   * CONNECTION VARIABLES
-   * ============================================================
-   */
+  const btn = document.getElementById("buzz-btn");
+  const status = document.getElementById("status-text");
+  const connLbl = document.getElementById("conn-lbl");
 
   let signalingWs = null;
-
   let peer = null;
-
   let channel = null;
-
   let candidateQueue = [];
-
-  let remoteDescriptionSet =
-    false;
-
+  let remoteDescriptionSet = false;
   let reconnectTimer = null;
-
   let retryDelay = 1000;
-
-  const MAX_RETRY_DELAY =
-    15000;
-
-
-  /*
-   * ============================================================
-   * IMPORTANT OCCUPIED-TEAM STATE
-   * ============================================================
-   *
-   * Once the server says the selected team is occupied,
-   * this phone must stop reconnecting automatically.
-   */
-
-  let teamRejected = false;
-
-
-  /*
-   * ============================================================
-   * GAME STATE
-   * ============================================================
-   */
+  const MAX_RETRY_DELAY = 15000;
 
   let phoneArmed = false;
-
   let phoneBuzzed = false;
 
+  // Prevent a phone rejected by the server from reconnecting repeatedly.
+  let teamRejected = false;
 
-  /*
-   * ============================================================
-   * STANDBY
-   * ============================================================
-   */
-
-  function setStandby(
-    text = "Waiting for host..."
-  ) {
-
-    phoneArmed =
-      false;
-
-    phoneBuzzed =
-      false;
-
-    btn.disabled =
-      true;
-
-    btn.className =
-      "";
-
-    btn.textContent =
-      "STANDBY";
-
-    status.textContent =
-      text;
+  function setStandby(text = "Waiting for host...") {
+    phoneArmed = false;
+    phoneBuzzed = false;
+    btn.disabled = true;
+    btn.className = "";
+    btn.textContent = "STANDBY";
+    status.textContent = text;
   }
-
-
-  /*
-   * ============================================================
-   * ARMED
-   * ============================================================
-   */
 
   function setArmed() {
+    if (teamRejected) return;
 
-    if (teamRejected) {
-      return;
-    }
-
-    phoneArmed =
-      true;
-
-    phoneBuzzed =
-      false;
-
-    btn.disabled =
-      false;
-
-    btn.className =
-      "armed";
-
-    btn.textContent =
-      "BUZZ!";
-
-    status.textContent =
-      "TAP NOW!";
-
-    navigator.vibrate?.(
-      [80,40,80]
-    );
+    phoneArmed = true;
+    phoneBuzzed = false;
+    btn.disabled = false;
+    btn.className = "armed";
+    btn.textContent = "BUZZ!";
+    status.textContent = "TAP NOW!";
+    navigator.vibrate?.([80, 40, 80]);
   }
 
+  function setLocked(winnerTeam) {
+    phoneArmed = false;
+    btn.disabled = true;
+    btn.classList.remove("armed", "countdown");
 
-  /*
-   * ============================================================
-   * LOCKED / WINNER
-   * ============================================================
-   */
-
-  function setLocked(
-    winnerTeam
-  ) {
-
-    phoneArmed =
-      false;
-
-    btn.disabled =
-      true;
-
-    btn.classList.remove(
-      "armed",
-      "countdown"
-    );
-
-
-    if (
-      Number(winnerTeam) ===
-      team
-    ) {
-
-      btn.classList.add(
-        "winner"
-      );
-
-      btn.textContent =
-        "YOU BUZZED!";
-
-      status.textContent =
-        "You got in first! Answer now.";
-
-      navigator.vibrate?.(
-        [100,50,100]
-      );
-
+    if (Number(winnerTeam) === team) {
+      btn.classList.add("winner");
+      btn.textContent = "YOU BUZZED!";
+      status.textContent = "You got in first! Answer now.";
+      navigator.vibrate?.([100, 50, 100]);
     } else {
-
-      btn.classList.remove(
-        "winner"
-      );
-
-      btn.textContent =
-        "LOCKED OUT";
-
-      status.textContent =
-        "Other team buzzed first!";
+      btn.classList.remove("winner");
+      btn.textContent = "LOCKED OUT";
+      status.textContent = "Other team buzzed first!";
     }
   }
 
-
-  /*
-   * ============================================================
-   * SEND WEBRTC SIGNAL
-   * ============================================================
-   */
-
-  function sendSignal(
-    data
-  ) {
-
-    if (
-      !signalingWs ||
-      signalingWs.readyState !==
-      WebSocket.OPEN
-    ) {
-
-      return false;
-    }
-
-
-    signalingWs.send(
-      JSON.stringify({
-        type:
-          "SIGNAL",
-
-        team,
-
-        data
-      })
-    );
-
-
+  function sendSignal(data) {
+    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) return false;
+    signalingWs.send(JSON.stringify({ type: "SIGNAL", team, data }));
     return true;
   }
 
-
-  /*
-   * ============================================================
-   * CLOSE WEBRTC PEER
-   * ============================================================
-   */
-
   function closePeer() {
-
-    candidateQueue =
-      [];
-
-    remoteDescriptionSet =
-      false;
-
-
+    candidateQueue = [];
+    remoteDescriptionSet = false;
     if (channel) {
-
-      try {
-        channel.close();
-      } catch (e) {}
-
+      try { channel.close(); } catch (e) {}
     }
-
-
-    channel =
-      null;
-
-
+    channel = null;
     if (peer) {
-
-      try {
-        peer.close();
-      } catch (e) {}
-
+      try { peer.close(); } catch (e) {}
     }
-
-
-    peer =
-      null;
+    peer = null;
   }
-
-
-  /*
-   * ============================================================
-   * CREATE PHONE PEER
-   * ============================================================
-   */
 
   async function createPhonePeer() {
-
-    if (teamRejected) {
-      return;
-    }
-
-
     closePeer();
-
-
-    const turnResponse =
-      await fetch(
-        `https://${SIGNALING_HOST}/turn-credentials`
-      );
-
+    const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
 
     if (!turnResponse.ok) {
-
-      throw new Error(
-        `TURN credentials failed: ${turnResponse.status}`
-      );
+      throw new Error(`TURN credentials failed: ${turnResponse.status}`);
     }
 
+    const turnData = await turnResponse.json();
 
-    const turnData =
-      await turnResponse.json();
+    peer = new RTCPeerConnection({
+      iceServers: turnData.iceServers
+    });
 
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal({ type: "candidate", candidate: event.candidate });
+      }
+    };
 
-    peer =
-      new RTCPeerConnection({
-        iceServers:
-          turnData.iceServers
-      });
+peer.oniceconnectionstatechange = () => {
+    console.log("Phone ICE state:", peer.iceConnectionState);
+};
 
+peer.onicegatheringstatechange = () => {
+    console.log("Phone ICE gathering:", peer.iceGatheringState);
+};
 
-    peer.onicecandidate =
-      (event) => {
+peer.onicecandidateerror = (event) => {
+    console.error(
+        "Phone ICE candidate ERROR:",
+        event.errorCode,
+        event.url,
+        event.errorText
+    );
+};
+    peer.onconnectionstatechange = () => {
+      if (!peer) return;
+      console.log("Phone WebRTC state:", peer.connectionState);
+      if (peer.connectionState === "connected") {
+        connLbl.textContent = "WebRTC Connected";
+        connLbl.style.color = "#22c55e";
+        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+      } else if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
+        connLbl.textContent = "WebRTC Disconnected";
+        connLbl.style.color = "#ef4444";
+        if (!phoneArmed) status.textContent = "Reconnecting...";
+      }
+    };
 
-        if (
-          event.candidate
-        ) {
+    peer.ondatachannel = (event) => {
+      channel = event.channel;
 
-          sendSignal({
-            type:
-              "candidate",
-
-            candidate:
-              event.candidate
-          });
-        }
+      channel.onopen = () => {
+        connLbl.textContent = "WebRTC Connected";
+        connLbl.style.color = "#22c55e";
+        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
       };
 
+      channel.onmessage = (event) => handleGameMessage(event.data);
 
-    peer.oniceconnectionstatechange =
-      () => {
-
-        if (!peer) {
-          return;
-        }
-
-        console.log(
-          "Phone ICE state:",
-          peer.iceConnectionState
-        );
+      channel.onclose = () => {
+        channel = null;
+        connLbl.textContent = "WebRTC Disconnected";
+        connLbl.style.color = "#ef4444";
+        if (!phoneArmed) status.textContent = "Reconnecting...";
       };
 
-
-    peer.onicegatheringstatechange =
-      () => {
-
-        if (!peer) {
-          return;
-        }
-
-        console.log(
-          "Phone ICE gathering:",
-          peer.iceGatheringState
-        );
-      };
-
-
-    peer.onicecandidateerror =
-      (event) => {
-
-        console.error(
-          "Phone ICE candidate ERROR:",
-          event.errorCode,
-          event.url,
-          event.errorText
-        );
-      };
-
-
-    peer.onconnectionstatechange =
-      () => {
-
-        if (!peer) {
-          return;
-        }
-
-
-        console.log(
-          "Phone WebRTC state:",
-          peer.connectionState
-        );
-
-
-        if (
-          peer.connectionState ===
-          "connected"
-        ) {
-
-          connLbl.textContent =
-            "WebRTC Connected";
-
-          connLbl.style.color =
-            "#22c55e";
-
-
-          status.textContent =
-            phoneArmed
-              ? "TAP NOW!"
-              : "Waiting for next question...";
-
-
-        } else if (
-          [
-            "failed",
-            "disconnected",
-            "closed"
-          ].includes(
-            peer.connectionState
-          )
-        ) {
-
-          connLbl.textContent =
-            "WebRTC Disconnected";
-
-          connLbl.style.color =
-            "#ef4444";
-
-
-          if (
-            !phoneArmed &&
-            !teamRejected
-          ) {
-
-            status.textContent =
-              "Reconnecting...";
-          }
-        }
-      };
-
-
-    /*
-     * ==========================================================
-     * DATA CHANNEL
-     * ==========================================================
-     */
-
-    peer.ondatachannel =
-      (event) => {
-
-        channel =
-          event.channel;
-
-
-        channel.onopen =
-          () => {
-
-            connLbl.textContent =
-              "WebRTC Connected";
-
-            connLbl.style.color =
-              "#22c55e";
-
-
-            status.textContent =
-              phoneArmed
-                ? "TAP NOW!"
-                : "Waiting for next question...";
-          };
-
-
-        channel.onmessage =
-          (event) => {
-
-            handleGameMessage(
-              event.data
-            );
-          };
-
-
-        channel.onclose =
-          () => {
-
-            channel =
-              null;
-
-
-            connLbl.textContent =
-              "WebRTC Disconnected";
-
-            connLbl.style.color =
-              "#ef4444";
-
-
-            if (
-              !phoneArmed &&
-              !teamRejected
-            ) {
-
-              status.textContent =
-                "Reconnecting...";
-            }
-          };
-
-
-        channel.onerror =
-          (error) => {
-
-            console.error(
-              "Phone DataChannel error:",
-              error
-            );
-          };
-      };
+      channel.onerror = (error) => console.error("Phone DataChannel error:", error);
+    };
   }
-
-
-  /*
-   * ============================================================
-   * FLUSH ICE CANDIDATES
-   * ============================================================
-   */
 
   async function flushCandidateQueue() {
-
-    if (
-      !peer ||
-      !remoteDescriptionSet
-    ) {
-
-      return;
-    }
-
-
-    for (
-      const candidate of
-      candidateQueue
-    ) {
-
-      try {
-
-        await peer.addIceCandidate(
-          candidate
-        );
-
-      } catch (e) {
-
-        console.warn(
-          "Queued ICE candidate failed:",
-          e
-        );
+    if (!peer || !remoteDescriptionSet) return;
+    for (const candidate of candidateQueue) {
+      try { await peer.addIceCandidate(candidate); } catch (e) {
+        console.warn("Queued ICE candidate failed:", e);
       }
     }
-
-
-    candidateQueue =
-      [];
+    candidateQueue = [];
   }
 
+  async function handleSignalMessage(msg) {
+    if (msg.type !== "SIGNAL" || !msg.data) return;
+    const data = msg.data;
+    if (!peer) createPhonePeer();
 
-  /*
-   * ============================================================
-   * HANDLE SIGNAL
-   * ============================================================
-   */
-
-  async function handleSignalMessage(
-    msg
-  ) {
-
-    if (
-      msg.type !==
-      "SIGNAL" ||
-      !msg.data
-    ) {
-
-      return;
-    }
-
-
-    const data =
-      msg.data;
-
-
-    if (!peer) {
-
-      await createPhonePeer();
-    }
-
-
-    /*
-     * ----------------------------------------------------------
-     * OFFER
-     * ----------------------------------------------------------
-     */
-
-    if (
-      data.type ===
-      "offer" &&
-      data.offer
-    ) {
-
+    if (data.type === "offer" && data.offer) {
       try {
-
-        await peer.setRemoteDescription(
-          data.offer
-        );
-
-
-        remoteDescriptionSet =
-          true;
-
-
+        await peer.setRemoteDescription(data.offer);
+        remoteDescriptionSet = true;
         await flushCandidateQueue();
-
-
-        const answer =
-          await peer.createAnswer();
-
-
-        await peer.setLocalDescription(
-          answer
-        );
-
-
-        sendSignal({
-          type:
-            "answer",
-
-          answer:
-            peer.localDescription
-        });
-
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        sendSignal({ type: "answer", answer: peer.localDescription });
       } catch (error) {
-
-        console.error(
-          "WebRTC offer/answer error:",
-          error
-        );
+        console.error("WebRTC offer/answer error:", error);
       }
-
-
       return;
     }
 
-
-    /*
-     * ----------------------------------------------------------
-     * ICE CANDIDATE
-     * ----------------------------------------------------------
-     */
-
-    if (
-      data.type ===
-      "candidate" &&
-      data.candidate
-    ) {
-
-      if (
-        remoteDescriptionSet
-      ) {
-
-        try {
-
-          await peer.addIceCandidate(
-            data.candidate
-          );
-
-        } catch (error) {
-
-          console.warn(
-            "ICE candidate failed:",
-            error
-          );
+    if (data.type === "candidate" && data.candidate) {
+      if (remoteDescriptionSet) {
+        try { await peer.addIceCandidate(data.candidate); } catch (error) {
+          console.warn("ICE candidate failed:", error);
         }
-
       } else {
-
-        candidateQueue.push(
-          data.candidate
-        );
+        candidateQueue.push(data.candidate);
       }
     }
   }
 
-
-  /*
-   * ============================================================
-   * GAME MESSAGE
-   * ============================================================
-   */
-
-  function handleGameMessage(
-    raw
-  ) {
-
+  function handleGameMessage(raw) {
     let msg;
-
-
-    try {
-
-      msg =
-        JSON.parse(raw);
-
-    } catch (e) {
-
-      return;
-    }
-
-
-    /*
-     * ARM
-     */
-
-    if (
-      msg.type ===
-      "ARM"
-    ) {
-
+    try { msg = JSON.parse(raw); } catch (e) { return; }
+    if (msg.type === "ARM") {
       setArmed();
-
       return;
     }
-
-
-    /*
-     * LOCK
-     */
-
-    if (
-      msg.type ===
-      "LOCK"
-    ) {
-
-      setLocked(
-        msg.winnerTeam
-      );
-
+    if (msg.type === "LOCK") {
+      setLocked(msg.winnerTeam);
       return;
     }
-
-
-    /*
-     * RESET
-     */
-
-    if (
-      msg.type ===
-      "RESET"
-    ) {
-
-      setStandby(
-        "Waiting for next question..."
-      );
-
-      return;
+    if (msg.type === "RESET") {
+      setStandby("Waiting for next question...");
     }
   }
-
-
-  /*
-   * ============================================================
-   * BUZZ
-   * ============================================================
-   */
 
   function buzz() {
+    if (teamRejected) return;
+    if (!phoneArmed || phoneBuzzed) return;
+    if (!channel || channel.readyState !== "open") return;
 
-    if (
-      !phoneArmed ||
-      phoneBuzzed ||
-      teamRejected
-    ) {
+    phoneBuzzed = true;
+    phoneArmed = false;
+    btn.disabled = true;
 
-      return;
-    }
-
-
-    if (
-      !channel ||
-      channel.readyState !==
-      "open"
-    ) {
-
-      return;
-    }
-
-
-    phoneBuzzed =
-      true;
-
-    phoneArmed =
-      false;
-
-    btn.disabled =
-      true;
-
-
-    channel.send(
-      JSON.stringify({
-        type:
-          "BUZZ",
-
-        team,
-
-        timestamp:
-          Date.now()
-      })
-    );
+    channel.send(JSON.stringify({
+      type: "BUZZ",
+      team,
+      timestamp: Date.now()
+    }));
   }
 
-
-  /*
-   * ============================================================
-   * BUTTON
-   * ============================================================
-   */
-
-  btn.addEventListener(
-    "pointerdown",
-    (event) => {
-
-      event.preventDefault();
-
-      buzz();
-    }
-  );
-
-
-  /*
-   * ============================================================
-   * CONNECT SIGNALING
-   * ============================================================
-   */
+  btn.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    buzz();
+  });
 
   function connectSignaling() {
+    if (teamRejected) return;
 
-    /*
-     * IMPORTANT:
-     *
-     * A phone rejected because its team is occupied
-     * must never automatically reconnect.
-     */
+    if (signalingWs && (signalingWs.readyState === WebSocket.OPEN || signalingWs.readyState === WebSocket.CONNECTING)) return;
 
-    if (teamRejected) {
-      return;
-    }
+    clearTimeout(reconnectTimer);
+    connLbl.textContent = "Connecting...";
+    connLbl.style.color = "";
 
+    signalingWs = new WebSocket("wss://" + SIGNALING_HOST + "/?room=" + encodeURIComponent(room));
 
-    if (
-      signalingWs &&
-      (
-        signalingWs.readyState ===
-        WebSocket.OPEN ||
+    signalingWs.onopen = () => {
+      if (teamRejected) {
+        try { signalingWs.close(); } catch (e) {}
+        return;
+      }
 
-        signalingWs.readyState ===
-        WebSocket.CONNECTING
-      )
-    ) {
+      retryDelay = 1000;
+      connLbl.textContent = "Signaling Connected";
+      connLbl.style.color = "#22c55e";
+      status.textContent = "Connecting buzzer...";
 
-      return;
-    }
+      signalingWs.send(JSON.stringify({
+        type: "REGISTER_PHONE",
+        team,
+        name
+      }));
 
+      createPhonePeer();
+    };
 
-    clearTimeout(
-      reconnectTimer
-    );
+    signalingWs.onmessage = async (event) => {
+      try {
+        const msg = JSON.parse(event.data);
 
+        // Server rejected this phone because its team is already occupied.
+        if (msg.type === "TEAM_OCCUPIED") {
+          teamRejected = true;
+          clearTimeout(reconnectTimer);
+          closePeer();
 
-    connLbl.textContent =
-      "Connecting...";
+          setStandby("Team " + (team + 1) + " is already connected.");
+          connLbl.textContent = "Team Occupied";
+          connLbl.style.color = "#ef4444";
 
-    connLbl.style.color =
-      "";
-
-
-    signalingWs =
-      new WebSocket(
-        "wss://" +
-        SIGNALING_HOST +
-        "/?room=" +
-        encodeURIComponent(room)
-      );
-
-
-    /*
-     * ----------------------------------------------------------
-     * OPEN
-     * ----------------------------------------------------------
-     */
-
-    signalingWs.onopen =
-      () => {
-
-        if (teamRejected) {
-
-          try {
-            signalingWs.close();
-          } catch (e) {}
-
+          try { signalingWs.close(); } catch (e) {}
           return;
         }
 
-
-        retryDelay =
-          1000;
-
-
-        connLbl.textContent =
-          "Signaling Connected";
-
-        connLbl.style.color =
-          "#22c55e";
-
-
-        status.textContent =
-          "Connecting buzzer...";
-
-
-        signalingWs.send(
-          JSON.stringify({
-            type:
-              "REGISTER_PHONE",
-
-            team,
-
-            name
-          })
-        );
-
-
-        createPhonePeer()
-          .catch(
-            (error) => {
-
-              console.error(
-                "Phone peer creation error:",
-                error
-              );
-            }
-          );
-      };
-
-
-    /*
-     * ----------------------------------------------------------
-     * MESSAGE
-     * ----------------------------------------------------------
-     */
-
-    signalingWs.onmessage =
-      async (event) => {
-
-        try {
-
-          const msg =
-            JSON.parse(
-              event.data
-            );
-
-
-          /*
-           * ====================================================
-           * TEAM OCCUPIED
-           * ====================================================
-           *
-           * Cloudflare Worker sends this when another phone
-           * already owns this team.
-           *
-           * We reject ONLY this phone.
-           * The existing phone remains connected.
-           */
-
-          if (
-            msg.type ===
-            "TEAM_OCCUPIED"
-          ) {
-
-            teamRejected =
-              true;
-
-
-            /*
-             * Cancel any reconnect timer.
-             */
-
-            clearTimeout(
-              reconnectTimer
-            );
-
-
-            /*
-             * Close any WebRTC objects created by this
-             * rejected phone.
-             */
-
-            closePeer();
-
-
-            /*
-             * Disable buzzer.
-             */
-
-            setStandby(
-              "Team " +
-              (team + 1) +
-              " is already connected."
-            );
-
-
-            /*
-             * Display clear connection state.
-             */
-
-            connLbl.textContent =
-              "Team Occupied";
-
-            connLbl.style.color =
-              "#ef4444";
-
-
-            /*
-             * Close ONLY this phone's signaling socket.
-             */
-
-            try {
-
-              signalingWs.close();
-
-            } catch (e) {}
-
-
-            return;
-          }
-
-
-          /*
-           * Normal WebRTC signaling.
-           */
-
-          await handleSignalMessage(
-            msg
-          );
-
-        } catch (error) {
-
-          console.error(
-            "Signaling message error:",
-            error
-          );
-        }
-      };
-
-
-    /*
-     * ----------------------------------------------------------
-     * ERROR
-     * ----------------------------------------------------------
-     */
-
-    signalingWs.onerror =
-      (error) => {
-
-        console.error(
-          "Signaling error:",
-          error
-        );
-
-
-        connLbl.textContent =
-          "Signaling Error";
-
-        connLbl.style.color =
-          "#ef4444";
-
-        /*
-         * Do not reconnect here.
-         *
-         * onclose handles normal reconnects.
-         */
-      };
-
-
-    /*
-     * ----------------------------------------------------------
-     * CLOSE
-     * ----------------------------------------------------------
-     */
-
-    signalingWs.onclose =
-      () => {
-
-        closePeer();
-
-
-        clearTimeout(
-          reconnectTimer
-        );
-
-
-        /*
-         * ======================================================
-         * TEAM OCCUPIED
-         * ======================================================
-         *
-         * This is NOT a normal connection failure.
-         *
-         * Do NOT reconnect.
-         */
-
-        if (teamRejected) {
-
-          connLbl.textContent =
-            "Team Occupied";
-
-          connLbl.style.color =
-            "#ef4444";
-
-
-          status.textContent =
-            "Team " +
-            (team + 1) +
-            " is already connected.";
-
-
-          return;
-        }
-
-
-        /*
-         * ======================================================
-         * NORMAL DISCONNECT
-         * ======================================================
-         */
-
-        connLbl.textContent =
-          "Offline";
-
-        connLbl.style.color =
-          "#ef4444";
-
-
-        if (!phoneArmed) {
-
-          status.textContent =
-            "Reconnecting in " +
-            (
-              retryDelay / 1000
-            ).toFixed(0) +
-            "s...";
-        }
-
-
-        reconnectTimer =
-          setTimeout(
-            connectSignaling,
-            retryDelay
-          );
-
-
-        retryDelay =
-          Math.min(
-            retryDelay * 2,
-            MAX_RETRY_DELAY
-          );
-      };
+        await handleSignalMessage(msg);
+      } catch (error) {
+        console.error("Signaling message error:", error);
+      }
+    };
+
+    signalingWs.onerror = (error) => {
+      console.error("Signaling error:", error);
+      connLbl.textContent = "Signaling Error";
+      connLbl.style.color = "#ef4444";
+    };
+
+    signalingWs.onclose = () => {
+      closePeer();
+
+      // Do NOT reconnect after the server has rejected this team.
+      if (teamRejected) {
+        connLbl.textContent = "Team Occupied";
+        connLbl.style.color = "#ef4444";
+        return;
+      }
+
+      connLbl.textContent = "Offline";
+      connLbl.style.color = "#ef4444";
+      if (!phoneArmed) status.textContent = "Reconnecting in " + (retryDelay / 1000).toFixed(0) + "s...";
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connectSignaling, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+    };
   }
 
-
-  /*
-   * ============================================================
-   * VISIBILITY CHANGE
-   * ============================================================
-   */
-
-  document.addEventListener(
-    "visibilitychange",
-    () => {
-
-      if (
-        document.visibilityState ===
-        "visible"
-      ) {
-
-        if (!teamRejected) {
-
-          connectSignaling();
-        }
-
-
-        if (
-          "wakeLock" in navigator
-        ) {
-
-          navigator.wakeLock
-            .request("screen")
-            .catch(
-              () => {}
-            );
-        }
-      }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (!teamRejected) connectSignaling();
+      if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
     }
-  );
+  });
 
+  window.addEventListener("pageshow", () => {
+    if (!teamRejected) connectSignaling();
+  });
 
-  /*
-   * ============================================================
-   * PAGE SHOW
-   * ============================================================
-   */
+  window.addEventListener("online", () => {
+    if (!teamRejected) connectSignaling();
+  });
 
-  window.addEventListener(
-    "pageshow",
-    () => {
-
-      if (!teamRejected) {
-
-        connectSignaling();
-      }
-    }
-  );
-
-
-  /*
-   * ============================================================
-   * ONLINE
-   * ============================================================
-   */
-
-  window.addEventListener(
-    "online",
-    () => {
-
-      if (!teamRejected) {
-
-        connectSignaling();
-      }
-    }
-  );
-
-
-  /*
-   * ============================================================
-   * WAKE LOCK
-   * ============================================================
-   */
-
-  if (
-    "wakeLock" in navigator
-  ) {
-
-    navigator.wakeLock
-      .request("screen")
-      .catch(
-        () => {}
-      );
-  }
-
-
-  /*
-   * ============================================================
-   * START
-   * ============================================================
-   */
+  if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
 
   setStandby();
-
   connectSignaling();
-
 </script>
 
 </body>
