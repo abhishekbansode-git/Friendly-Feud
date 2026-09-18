@@ -80,6 +80,7 @@
       font-size: 32px;
       font-weight: 900;
       color: rgba(255,255,255,0.5);
+      /* Dark unlit red */
       background: radial-gradient(circle at 35% 35%, #b71c1c, #4a0404);
       box-shadow: 
         0 20px 30px rgba(0,0,0,0.9),
@@ -107,6 +108,7 @@
 
     #buzz-btn.armed {
       color: #fff;
+      /* Bright glowing red */
       background: radial-gradient(circle at 35% 35%, #ff4d4d, #d32f2f);
       box-shadow: 
         0 15px 25px rgba(0,0,0,0.6),
@@ -156,289 +158,6 @@
   </div>
 
 <script>
-  const FF_DIAGNOSTIC = (() => {
-    const entries = [];
-    let sequence = 0;
-    let downloaded = false;
-    let statsTimer = null;
-    let lastPath = null;
-
-    const safeStringify = (value) => {
-      try {
-        if (value instanceof Error) {
-          return `${value.name}: ${value.message}\n${value.stack || ""}`;
-        }
-        if (typeof value === "string") return value;
-        return JSON.stringify(value, (key, val) => {
-          if (val instanceof Error) {
-            return { name: val.name, message: val.message, stack: val.stack };
-          }
-          return val;
-        });
-      } catch (_) {
-        try { return String(value); } catch (__) { return "[Unserializable]"; }
-      }
-    };
-
-    const safeGet = (fn, fallback = null) => {
-      try { return fn(); } catch (_) { return fallback; }
-    };
-
-    const context = () => ({
-      room: safeGet(() => room),
-      team: safeGet(() => team + 1),
-      online: navigator.onLine,
-      visibility: document.visibilityState,
-      userAgent: navigator.userAgent,
-      screen: `${screen.width}x${screen.height}`,
-      viewport: `${window.innerWidth}x${window.innerHeight}`,
-      dpr: window.devicePixelRatio,
-      connectionLabel: safeGet(() => connLbl.textContent),
-      armed: safeGet(() => phoneArmed),
-      buzzed: safeGet(() => phoneBuzzed),
-      rejected: safeGet(() => teamRejected)
-    });
-
-    const add = (category, event, data = {}) => {
-      const item = {
-        seq: ++sequence,
-        time: new Date().toISOString(),
-        category,
-        event,
-        data,
-        context: context()
-      };
-      entries.push(item);
-      if (entries.length > 20000) entries.shift();
-      return item;
-    };
-
-    const event = (eventName, data = {}) => add("EVENT", eventName, data);
-
-    const originalConsole = {
-      log: console.log.bind(console),
-      info: console.info.bind(console),
-      warn: console.warn.bind(console),
-      error: console.error.bind(console)
-    };
-
-    ["log", "info", "warn", "error"].forEach((level) => {
-      console[level] = (...args) => {
-        add("CONSOLE", level.toUpperCase(), {
-          args: args.map(safeStringify)
-        });
-        originalConsole[level](...args);
-      };
-    });
-
-    window.addEventListener("error", (e) => {
-      add("BROWSER_ERROR", "WINDOW_ERROR", {
-        message: e.message,
-        source: e.filename,
-        line: e.lineno,
-        column: e.colno,
-        error: safeStringify(e.error)
-      });
-    });
-
-    window.addEventListener("unhandledrejection", (e) => {
-      add("BROWSER_ERROR", "UNHANDLED_REJECTION", {
-        reason: safeStringify(e.reason)
-      });
-    });
-
-    window.addEventListener("online", () => event("NETWORK_ONLINE"));
-    window.addEventListener("offline", () => event("NETWORK_OFFLINE"));
-    document.addEventListener("visibilitychange", () => {
-      event("VISIBILITY_CHANGED", { state: document.visibilityState });
-    });
-    window.addEventListener("pageshow", () => event("PAGE_SHOW"));
-    window.addEventListener("pagehide", () => event("PAGE_HIDE"));
-
-    const getPathInfo = async () => {
-      if (!peer) return null;
-
-      try {
-        const stats = await peer.getStats();
-        let selectedPair = null;
-
-        stats.forEach((report) => {
-          if (report.type === "transport" && report.selectedCandidatePairId) {
-            const pair = stats.get(report.selectedCandidatePairId);
-            if (pair) selectedPair = pair;
-          }
-        });
-
-        if (!selectedPair) {
-          stats.forEach((report) => {
-            if (
-              report.type === "candidate-pair" &&
-              report.state === "succeeded" &&
-              (report.selected || report.nominated)
-            ) {
-              selectedPair = report;
-            }
-          });
-        }
-
-        if (!selectedPair) {
-          stats.forEach((report) => {
-            if (
-              !selectedPair &&
-              report.type === "candidate-pair" &&
-              report.state === "succeeded"
-            ) {
-              selectedPair = report;
-            }
-          });
-        }
-
-        if (!selectedPair) {
-          return {
-            status: "NO_SELECTED_PAIR_YET",
-            connectionState: peer.connectionState,
-            iceConnectionState: peer.iceConnectionState,
-            iceGatheringState: peer.iceGatheringState
-          };
-        }
-
-        const local = stats.get(selectedPair.localCandidateId);
-        const remote = stats.get(selectedPair.remoteCandidateId);
-        const localType = local?.candidateType || "unknown";
-        const remoteType = remote?.candidateType || "unknown";
-        const isRelay = localType === "relay" || remoteType === "relay";
-
-        return {
-          status: "SELECTED",
-          path: isRelay ? "TURN / RELAY" : "DIRECT",
-          localCandidateType: localType,
-          remoteCandidateType: remoteType,
-          localProtocol: local?.protocol || null,
-          remoteProtocol: remote?.protocol || null,
-          relayProtocol: local?.relayProtocol || remote?.relayProtocol || null,
-          localAddress: local?.address || local?.ip || null,
-          remoteAddress: remote?.address || remote?.ip || null,
-          bytesSent: selectedPair.bytesSent ?? null,
-          bytesReceived: selectedPair.bytesReceived ?? null,
-          packetsSent: selectedPair.packetsSent ?? null,
-          packetsReceived: selectedPair.packetsReceived ?? null,
-          packetsLost: selectedPair.packetsLost ?? null,
-          currentRoundTripTime: selectedPair.currentRoundTripTime ?? null,
-          availableOutgoingBitrate: selectedPair.availableOutgoingBitrate ?? null,
-          availableIncomingBitrate: selectedPair.availableIncomingBitrate ?? null,
-          connectionState: peer.connectionState,
-          iceConnectionState: peer.iceConnectionState,
-          iceGatheringState: peer.iceGatheringState
-        };
-      } catch (error) {
-        return {
-          status: "STATS_ERROR",
-          error: safeStringify(error),
-          connectionState: peer?.connectionState,
-          iceConnectionState: peer?.iceConnectionState,
-          iceGatheringState: peer?.iceGatheringState
-        };
-      }
-    };
-
-    const recordPath = async (reason) => {
-      const path = await getPathInfo();
-      event("WEBRTC_STATS", { reason, ...path });
-
-      if (path?.status === "SELECTED") {
-        if (path.path !== lastPath) {
-          event("WEBRTC_PATH_CHANGED", {
-            path: path.path,
-            previousPath: lastPath,
-            reason,
-            localCandidateType: path.localCandidateType,
-            remoteCandidateType: path.remoteCandidateType,
-            relayProtocol: path.relayProtocol
-          });
-          lastPath = path.path;
-        }
-
-        event(
-          path.path === "TURN / RELAY"
-            ? "WEBRTC_PATH_TURN"
-            : "WEBRTC_PATH_DIRECT",
-          {
-            reason,
-            localCandidateType: path.localCandidateType,
-            remoteCandidateType: path.remoteCandidateType,
-            relayProtocol: path.relayProtocol
-          }
-        );
-      }
-    };
-
-    const startStats = () => {
-      if (statsTimer) clearInterval(statsTimer);
-      statsTimer = setInterval(() => recordPath("PERIODIC_5S"), 5000);
-      recordPath("CONNECTED");
-    };
-
-    const stopStats = () => {
-      if (statsTimer) {
-        clearInterval(statsTimer);
-        statsTimer = null;
-      }
-    };
-
-    const download = (reason = "GAME_OVER") => {
-      if (downloaded) return;
-      downloaded = true;
-      event("DIAGNOSTIC_DOWNLOAD", { reason });
-
-      const teamNumber = typeof team !== "undefined" ? team + 1 : "UNKNOWN";
-      const roomCode = typeof room !== "undefined" ? room : "UNKNOWN";
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-
-      const header = [
-        "FRIENDLY FEUD - PHONE DIAGNOSTIC LOG",
-        "=====================================",
-        `Generated: ${new Date().toString()}`,
-        `Reason: ${reason}`,
-        `Room: ${roomCode}`,
-        `Team: ${teamNumber}`,
-        "",
-        "This file contains diagnostic events captured locally on the phone.",
-        "No diagnostic data is sent to Cloudflare by this logger.",
-        ""
-      ].join("\n");
-
-      const body = entries.map((item) =>
-        `[${String(item.seq).padStart(5, "0")}] ${item.time} | ${item.category} | ${item.event} | DATA=${safeStringify(item.data)} | CONTEXT=${safeStringify(item.context)}`
-      ).join("\n");
-
-      const blob = new Blob([header + body + "\n"], {
-        type: "text/plain;charset=utf-8"
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `FriendlyFeud_Team${teamNumber}_${roomCode}_${stamp}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    };
-
-    return {
-      event,
-      recordPath,
-      startStats,
-      stopStats,
-      download,
-      getEntries: () => entries.slice()
-    };
-  })();
-
-  FF_DIAGNOSTIC.event("DIAGNOSTIC_INITIALIZED", {
-    version: "phone-full-test-logger-v1"
-  });
-
   const SIGNALING_HOST = "friendly-feud-signaling.friendlyfeud.workers.dev";
   const RTC_CONFIG = {
     iceServers: [
@@ -468,13 +187,6 @@
 
   team = Number(team);
 
-  FF_DIAGNOSTIC.event("PHONE_CONFIGURATION", {
-    room,
-    team: team + 1,
-    name,
-    color
-  });
-
   if (!room || room.length !== 4 || (team !== 0 && team !== 1)) {
     document.getElementById("status-text").textContent = "Invalid room or team. Please scan QR again.";
     document.getElementById("conn-lbl").textContent = "Invalid";
@@ -492,8 +204,6 @@
 
   let signalingWs = null;
   let peer = null;
-  let peerCreationPromise = null;
-  let peerGeneration = 0;
   let channel = null;
   let candidateQueue = [];
   let remoteDescriptionSet = false;
@@ -508,8 +218,6 @@
   let teamRejected = false;
 
   function setStandby(text = "Waiting for host...") {
-    FF_DIAGNOSTIC.event("SET_STANDBY", { text });
-
     phoneArmed = false;
     phoneBuzzed = false;
     btn.disabled = true;
@@ -519,12 +227,7 @@
   }
 
   function setArmed() {
-    if (teamRejected) {
-      FF_DIAGNOSTIC.event("ARM_IGNORED_TEAM_REJECTED");
-      return;
-    }
-
-    FF_DIAGNOSTIC.event("ARM_RECEIVED");
+    if (teamRejected) return;
 
     phoneArmed = true;
     phoneBuzzed = false;
@@ -536,11 +239,6 @@
   }
 
   function setLocked(winnerTeam) {
-    FF_DIAGNOSTIC.event("LOCK_RECEIVED", {
-      winnerTeam: Number(winnerTeam) + 1,
-      thisTeam: team + 1
-    });
-
     phoneArmed = false;
     btn.disabled = true;
     btn.classList.remove("armed", "countdown");
@@ -558,161 +256,158 @@
   }
 
   function sendSignal(data) {
-    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) {
-      FF_DIAGNOSTIC.event("SIGNAL_SEND_FAILED_WS_NOT_OPEN", { data });
-      return false;
-    }
-
-    FF_DIAGNOSTIC.event("SIGNAL_SENT", { data });
+    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) return false;
     signalingWs.send(JSON.stringify({ type: "SIGNAL", team, data }));
     return true;
   }
 
   function closePeer() {
-    peerGeneration++;
-    FF_DIAGNOSTIC.event("PEER_CLOSE_REQUESTED", { hadPeer: !!peer, hadChannel: !!channel });
-    FF_DIAGNOSTIC.stopStats();
-    candidateQueue = []; remoteDescriptionSet = false;
-    if (channel) { try { channel.close(); } catch (e) {} }
+    candidateQueue = [];
+    remoteDescriptionSet = false;
+    if (channel) {
+      try { channel.close(); } catch (e) {}
+    }
     channel = null;
-    if (peer) { try { peer.close(); } catch (e) {} }
+    if (peer) {
+      try { peer.close(); } catch (e) {}
+    }
     peer = null;
   }
 
   async function createPhonePeer() {
-    if (peer && peer.connectionState !== "closed") return peer;
-    if (peerCreationPromise) { FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_REUSED_IN_FLIGHT"); return peerCreationPromise; }
-    const generation = peerGeneration;
-    peerCreationPromise = (async () => {
-      FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
-      if (peer) closePeer();
-      
-      const pc = new RTCPeerConnection(RTC_CONFIG);
-      
-      if (generation !== peerGeneration) { try { pc.close(); } catch (e) {} throw new Error("Stale peer creation discarded"); }
-      peer = pc;
-      FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
-      pc.onicecandidate = (event) => { if (peer !== pc) return; if (event.candidate) { FF_DIAGNOSTIC.event("ICE_CANDIDATE_LOCAL", { candidateType: event.candidate.type || null, protocol: event.candidate.protocol || null }); sendSignal({ type: "candidate", candidate: event.candidate }); } };
-      pc.oniceconnectionstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_CONNECTION_STATE", { state: pc.iceConnectionState }); console.log("Phone ICE state:", pc.iceConnectionState); if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") FF_DIAGNOSTIC.recordPath("ICE_CONNECTED_OR_COMPLETED"); };
-      pc.onicegatheringstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_GATHERING_STATE", { state: pc.iceGatheringState }); };
-      pc.onicecandidateerror = (event) => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_CANDIDATE_ERROR", { address: event.address || null, port: event.port || null, url: event.url || null, errorCode: event.errorCode || null, errorText: event.errorText || null }); };
-      pc.onconnectionstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("WEBRTC_CONNECTION_STATE", { state: pc.connectionState }); };
-      
-      pc.ondatachannel = (event) => {
-        if (peer !== pc) return; channel = event.channel;
-        FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", { label: channel.label, readyState: channel.readyState });
-        channel.onopen = () => { 
-          if (peer !== pc) return; 
-          FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); 
-          FF_DIAGNOSTIC.startStats(pc); 
-          setStandby("Connected! Waiting for host...");
-        };
-        channel.onclose = () => FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", { label: channel.label });
-        channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
-        channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
+    closePeer();
+    const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
+
+    if (!turnResponse.ok) {
+      throw new Error(`TURN credentials failed: ${turnResponse.status}`);
+    }
+
+    const turnData = await turnResponse.json();
+
+    peer = new RTCPeerConnection({
+      iceServers: turnData.iceServers
+    });
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal({ type: "candidate", candidate: event.candidate });
+      }
+    };
+
+peer.oniceconnectionstatechange = () => {
+    console.log("Phone ICE state:", peer.iceConnectionState);
+};
+
+peer.onicegatheringstatechange = () => {
+    console.log("Phone ICE gathering:", peer.iceGatheringState);
+};
+
+peer.onicecandidateerror = (event) => {
+    console.error(
+        "Phone ICE candidate ERROR:",
+        event.errorCode,
+        event.url,
+        event.errorText
+    );
+};
+    peer.onconnectionstatechange = () => {
+      if (!peer) return;
+      console.log("Phone WebRTC state:", peer.connectionState);
+      if (peer.connectionState === "connected") {
+        connLbl.textContent = "WebRTC Connected";
+        connLbl.style.color = "#22c55e";
+        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+      } else if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
+        connLbl.textContent = "WebRTC Disconnected";
+        connLbl.style.color = "#ef4444";
+        if (!phoneArmed) status.textContent = "Reconnecting...";
+      }
+    };
+
+    peer.ondatachannel = (event) => {
+      channel = event.channel;
+
+      channel.onopen = () => {
+        connLbl.textContent = "WebRTC Connected";
+        connLbl.style.color = "#22c55e";
+        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
       };
-      
-      return pc;
-    })().finally(() => { peerCreationPromise = null; });
-    return peerCreationPromise;
+
+      channel.onmessage = (event) => handleGameMessage(event.data);
+
+      channel.onclose = () => {
+        channel = null;
+        connLbl.textContent = "WebRTC Disconnected";
+        connLbl.style.color = "#ef4444";
+        if (!phoneArmed) status.textContent = "Reconnecting...";
+      };
+
+      channel.onerror = (error) => console.error("Phone DataChannel error:", error);
+    };
   }
 
-  async function flushCandidateQueue(pc) { const queued = candidateQueue; candidateQueue = []; for (const candidate of queued) await pc.addIceCandidate(candidate); }
+  async function flushCandidateQueue() {
+    if (!peer || !remoteDescriptionSet) return;
+    for (const candidate of candidateQueue) {
+      try { await peer.addIceCandidate(candidate); } catch (e) {
+        console.warn("Queued ICE candidate failed:", e);
+      }
+    }
+    candidateQueue = [];
+  }
 
   async function handleSignalMessage(msg) {
     if (msg.type !== "SIGNAL" || !msg.data) return;
     const data = msg.data;
-    const pc = await createPhonePeer();
+    if (!peer) createPhonePeer();
+
     if (data.type === "offer" && data.offer) {
-      if (peer !== pc) return;
-      await pc.setRemoteDescription(data.offer); remoteDescriptionSet = true;
-      await flushCandidateQueue(pc);
-      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
-      sendSignal({ type: "answer", answer: pc.localDescription }); return;
+      try {
+        await peer.setRemoteDescription(data.offer);
+        remoteDescriptionSet = true;
+        await flushCandidateQueue();
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        sendSignal({ type: "answer", answer: peer.localDescription });
+      } catch (error) {
+        console.error("WebRTC offer/answer error:", error);
+      }
+      return;
     }
+
     if (data.type === "candidate" && data.candidate) {
-      if (peer !== pc) return;
-      if (remoteDescriptionSet) await pc.addIceCandidate(data.candidate); else candidateQueue.push(data.candidate);
+      if (remoteDescriptionSet) {
+        try { await peer.addIceCandidate(data.candidate); } catch (error) {
+          console.warn("ICE candidate failed:", error);
+        }
+      } else {
+        candidateQueue.push(data.candidate);
+      }
     }
   }
 
   function handleGameMessage(raw) {
     let msg;
-    try {
-      msg = typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch (error) {
-      FF_DIAGNOSTIC.event("GAME_MESSAGE_PARSE_ERROR", {
-        raw: String(raw),
-        error: error?.message || String(error)
-      });
-      console.error("Game message parse error:", error);
+    try { msg = JSON.parse(raw); } catch (e) { return; }
+    if (msg.type === "ARM") {
+      setArmed();
       return;
     }
-
-    FF_DIAGNOSTIC.event("GAME_MESSAGE_RECEIVED", {
-      type: msg?.type || null,
-      message: msg
-    });
-
-    if (!msg || !msg.type) return;
-
-    switch (msg.type) {
-      case "ARM":
-        setArmed();
-        break;
-
-      case "LOCK":
-        setLocked(msg.winnerTeam);
-        break;
-
-      case "RESET":
-        setStandby("Waiting for host...");
-        break;
-
-      case "GAME_OVER":
-        phoneArmed = false;
-        phoneBuzzed = false;
-        btn.disabled = true;
-        btn.className = "";
-        btn.textContent = "GAME OVER";
-        status.textContent = "Game finished.";
-        FF_DIAGNOSTIC.event("GAME_OVER_RECEIVED");
-        FF_DIAGNOSTIC.download("GAME_OVER");
-        break;
-
-      default:
-        FF_DIAGNOSTIC.event("GAME_MESSAGE_UNKNOWN", { type: msg.type });
+    if (msg.type === "LOCK") {
+      setLocked(msg.winnerTeam);
+      return;
+    }
+    if (msg.type === "RESET") {
+      setStandby("Waiting for next question...");
     }
   }
 
   function buzz() {
-    if (teamRejected) {
-      FF_DIAGNOSTIC.event("BUZZ_IGNORED_TEAM_REJECTED");
-      return;
-    }
-
-    if (!phoneArmed) {
-      FF_DIAGNOSTIC.event("BUZZ_IGNORED_NOT_ARMED");
-      return;
-    }
-
-    if (phoneBuzzed) {
-      FF_DIAGNOSTIC.event("BUZZ_IGNORED_ALREADY_BUZZED");
-      return;
-    }
-
-    if (!channel || channel.readyState !== "open") {
-      FF_DIAGNOSTIC.event("BUZZ_IGNORED_DATACHANNEL_NOT_OPEN", {
-        readyState: channel?.readyState || null
-      });
-      return;
-    }
+    if (teamRejected) return;
+    if (!phoneArmed || phoneBuzzed) return;
+    if (!channel || channel.readyState !== "open") return;
 
     phoneBuzzed = true;
-
-    FF_DIAGNOSTIC.event("BUZZ_SENT", {
-      timestamp: Date.now()
-    });
     phoneArmed = false;
     btn.disabled = true;
 
@@ -729,15 +424,7 @@
   });
 
   function connectSignaling() {
-    if (teamRejected) {
-      FF_DIAGNOSTIC.event("SIGNAL_CONNECT_IGNORED_TEAM_REJECTED");
-      return;
-    }
-
-    FF_DIAGNOSTIC.event("SIGNAL_CONNECT_ATTEMPT", {
-      room,
-      team: team + 1
-    });
+    if (teamRejected) return;
 
     if (signalingWs && (signalingWs.readyState === WebSocket.OPEN || signalingWs.readyState === WebSocket.CONNECTING)) return;
 
@@ -748,8 +435,6 @@
     signalingWs = new WebSocket("wss://" + SIGNALING_HOST + "/?room=" + encodeURIComponent(room));
 
     signalingWs.onopen = () => {
-      FF_DIAGNOSTIC.event("SIGNAL_WS_OPEN");
-
       if (teamRejected) {
         try { signalingWs.close(); } catch (e) {}
         return;
@@ -760,40 +445,21 @@
       connLbl.style.color = "#22c55e";
       status.textContent = "Connecting buzzer...";
 
-      const registration = {
+      signalingWs.send(JSON.stringify({
         type: "REGISTER_PHONE",
         team,
         name
-      };
+      }));
 
-      FF_DIAGNOSTIC.event("REGISTER_PHONE_SENT", {
-        team: team + 1,
-        name
-      });
-
-      signalingWs.send(JSON.stringify(registration));
-
-      createPhonePeer().catch((error) => {
-        FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_ERROR", { message: error?.message || String(error) });
-        console.error("Phone WebRTC setup failed:", error);
-      });
+      createPhonePeer();
     };
 
     signalingWs.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
 
-        FF_DIAGNOSTIC.event("SIGNAL_MESSAGE_RECEIVED", {
-          message: msg
-        });
-
         // Server rejected this phone because its team is already occupied.
         if (msg.type === "TEAM_OCCUPIED") {
-          FF_DIAGNOSTIC.event("TEAM_OCCUPIED_REJECTED", {
-            team: team + 1,
-            message: msg
-          });
-
           teamRejected = true;
           clearTimeout(reconnectTimer);
           closePeer();
@@ -808,29 +474,17 @@
 
         await handleSignalMessage(msg);
       } catch (error) {
-        FF_DIAGNOSTIC.event("SIGNAL_MESSAGE_ERROR", {
-          error: String(error)
-        });
         console.error("Signaling message error:", error);
       }
     };
 
     signalingWs.onerror = (error) => {
-      FF_DIAGNOSTIC.event("SIGNAL_WS_ERROR", {
-        error: String(error)
-      });
       console.error("Signaling error:", error);
       connLbl.textContent = "Signaling Error";
       connLbl.style.color = "#ef4444";
     };
 
-    signalingWs.onclose = (event) => {
-      FF_DIAGNOSTIC.event("SIGNAL_WS_CLOSE", {
-        code: event?.code,
-        reason: event?.reason,
-        wasClean: event?.wasClean
-      });
-
+    signalingWs.onclose = () => {
       closePeer();
 
       // Do NOT reconnect after the server has rejected this team.
@@ -852,13 +506,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       if (!teamRejected) connectSignaling();
-      if ("wakeLock" in navigator) {
-        navigator.wakeLock.request("screen")
-          .then(() => FF_DIAGNOSTIC.event("WAKE_LOCK_ACQUIRED"))
-          .catch((error) => FF_DIAGNOSTIC.event("WAKE_LOCK_FAILED", {
-            error: String(error)
-          }));
-      }
+      if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
     }
   });
 
@@ -870,18 +518,10 @@
     if (!teamRejected) connectSignaling();
   });
 
-  if ("wakeLock" in navigator) {
-    navigator.wakeLock.request("screen")
-      .then(() => FF_DIAGNOSTIC.event("WAKE_LOCK_ACQUIRED_INITIAL"))
-      .catch((error) => FF_DIAGNOSTIC.event("WAKE_LOCK_FAILED_INITIAL", {
-        error: String(error)
-      }));
-  }
+  if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
 
   setStandby();
-  FF_DIAGNOSTIC.event("PHONE_READY");
   connectSignaling();
-
 </script>
 
 </body>
