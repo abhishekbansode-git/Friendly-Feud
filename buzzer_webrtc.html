@@ -502,6 +502,8 @@
 
   let signalingWs = null;
   let peer = null;
+  let peerCreationPromise = null;
+  let peerGeneration = 0;
   let channel = null;
   let candidateQueue = [];
   let remoteDescriptionSet = false;
@@ -577,255 +579,65 @@
   }
 
   function closePeer() {
-    FF_DIAGNOSTIC.event("PEER_CLOSE_REQUESTED", {
-      hadPeer: !!peer,
-      hadChannel: !!channel
-    });
-
+    peerGeneration++;
+    FF_DIAGNOSTIC.event("PEER_CLOSE_REQUESTED", { hadPeer: !!peer, hadChannel: !!channel });
     FF_DIAGNOSTIC.stopStats();
-
-    candidateQueue = [];
-    remoteDescriptionSet = false;
-    if (channel) {
-      try { channel.close(); } catch (e) {}
-    }
+    candidateQueue = []; remoteDescriptionSet = false;
+    if (channel) { try { channel.close(); } catch (e) {} }
     channel = null;
-    if (peer) {
-      try { peer.close(); } catch (e) {}
-    }
+    if (peer) { try { peer.close(); } catch (e) {} }
     peer = null;
   }
 
   async function createPhonePeer() {
-    FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
-
-    closePeer();
-    const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
-
-    if (!turnResponse.ok) {
-      throw new Error(`TURN credentials failed: ${turnResponse.status}`);
-    }
-
-    const turnData = await turnResponse.json();
-
-    FF_DIAGNOSTIC.event("TURN_CREDENTIALS_RECEIVED", {
-      ok: true,
-      iceServerCount: Array.isArray(turnData?.iceServers)
-        ? turnData.iceServers.length
-        : null
-    });
-
-    peer = new RTCPeerConnection({
-      iceServers: turnData.iceServers
-    });
-
-    FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
-
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        FF_DIAGNOSTIC.event("ICE_CANDIDATE_LOCAL", {
-          candidateType: event.candidate.type || null,
-          protocol: event.candidate.protocol || null
-        });
-        sendSignal({ type: "candidate", candidate: event.candidate });
-      }
-    };
-
-peer.oniceconnectionstatechange = () => {
-    FF_DIAGNOSTIC.event("ICE_CONNECTION_STATE", {
-      state: peer.iceConnectionState
-    });
-    console.log("Phone ICE state:", peer.iceConnectionState);
-
-    if (
-      peer.iceConnectionState === "connected" ||
-      peer.iceConnectionState === "completed"
-    ) {
-      FF_DIAGNOSTIC.recordPath("ICE_CONNECTED_OR_COMPLETED");
-    }
-};
-
-peer.onicegatheringstatechange = () => {
-    FF_DIAGNOSTIC.event("ICE_GATHERING_STATE", {
-      state: peer.iceGatheringState
-    });
-    console.log("Phone ICE gathering:", peer.iceGatheringState);
-};
-
-peer.onicecandidateerror = (event) => {
-    FF_DIAGNOSTIC.event("ICE_CANDIDATE_ERROR", {
-      errorCode: event.errorCode,
-      url: event.url,
-      errorText: event.errorText
-    });
-    console.error(
-        "Phone ICE candidate ERROR:",
-        event.errorCode,
-        event.url,
-        event.errorText
-    );
-};
-    peer.onconnectionstatechange = () => {
-      if (!peer) return;
-
-      FF_DIAGNOSTIC.event("WEBRTC_CONNECTION_STATE", {
-        state: peer.connectionState
-      });
-
-      console.log("Phone WebRTC state:", peer.connectionState);
-      if (peer.connectionState === "connected") {
-        FF_DIAGNOSTIC.event("WEBRTC_CONNECTED");
-        FF_DIAGNOSTIC.startStats();
-
-        connLbl.textContent = "WebRTC Connected";
-        connLbl.style.color = "#22c55e";
-        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
-      } else if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
-        connLbl.textContent = "WebRTC Disconnected";
-        connLbl.style.color = "#ef4444";
-        if (!phoneArmed) status.textContent = "Reconnecting...";
-      }
-    };
-
-    peer.ondatachannel = (event) => {
-      channel = event.channel;
-
-      FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", {
-        label: channel.label,
-        readyState: channel.readyState
-      });
-
-      channel.onopen = () => {
-        FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", {
-          label: channel.label,
-          readyState: channel.readyState
-        });
-        FF_DIAGNOSTIC.startStats();
-
-        connLbl.textContent = "WebRTC Connected";
-        connLbl.style.color = "#22c55e";
-        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+    if (peer && peer.connectionState !== "closed") return peer;
+    if (peerCreationPromise) { FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_REUSED_IN_FLIGHT"); return peerCreationPromise; }
+    const generation = peerGeneration;
+    peerCreationPromise = (async () => {
+      FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
+      if (peer) closePeer();
+      const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
+      if (!turnResponse.ok) throw new Error(`TURN credentials failed: ${turnResponse.status}`);
+      const turnData = await turnResponse.json();
+      FF_DIAGNOSTIC.event("TURN_CREDENTIALS_RECEIVED", { ok: true, iceServerCount: Array.isArray(turnData?.iceServers) ? turnData.iceServers.length : null });
+      const pc = new RTCPeerConnection({ iceServers: turnData.iceServers });
+      if (generation !== peerGeneration) { try { pc.close(); } catch (e) {} throw new Error("Stale peer creation discarded"); }
+      peer = pc;
+      FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
+      pc.onicecandidate = (event) => { if (peer !== pc) return; if (event.candidate) { FF_DIAGNOSTIC.event("ICE_CANDIDATE_LOCAL", { candidateType: event.candidate.type || null, protocol: event.candidate.protocol || null }); sendSignal({ type: "candidate", candidate: event.candidate }); } };
+      pc.oniceconnectionstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_CONNECTION_STATE", { state: pc.iceConnectionState }); console.log("Phone ICE state:", pc.iceConnectionState); if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") FF_DIAGNOSTIC.recordPath("ICE_CONNECTED_OR_COMPLETED"); };
+      pc.onicegatheringstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_GATHERING_STATE", { state: pc.iceGatheringState }); };
+      pc.onicecandidateerror = (event) => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_CANDIDATE_ERROR", { address: event.address || null, port: event.port || null, url: event.url || null, errorCode: event.errorCode || null, errorText: event.errorText || null }); };
+      pc.onconnectionstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("WEBRTC_CONNECTION_STATE", { state: pc.connectionState }); };
+      pc.ondatachannel = (event) => {
+        if (peer !== pc) return; channel = event.channel;
+        FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", { label: channel.label, readyState: channel.readyState });
+        channel.onopen = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); FF_DIAGNOSTIC.startStats(pc); };
+        channel.onclose = () => FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", { label: channel.label });
+        channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
+        channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
       };
-
-      channel.onmessage = (event) => {
-        FF_DIAGNOSTIC.event("DATACHANNEL_MESSAGE_RECEIVED", {
-          raw: event.data
-        });
-        handleGameMessage(event.data);
-      };
-
-      channel.onclose = () => {
-        FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", {
-          readyState: channel?.readyState
-        });
-        FF_DIAGNOSTIC.stopStats();
-
-        channel = null;
-        connLbl.textContent = "WebRTC Disconnected";
-        connLbl.style.color = "#ef4444";
-        if (!phoneArmed) status.textContent = "Reconnecting...";
-      };
-
-      channel.onerror = (error) => {
-        FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", {
-          error: String(error)
-        });
-        console.error("Phone DataChannel error:", error);
-      };
-    };
+      return pc;
+    })().finally(() => { peerCreationPromise = null; });
+    return peerCreationPromise;
   }
 
-  async function flushCandidateQueue() {
-    if (!peer || !remoteDescriptionSet) return;
-    for (const candidate of candidateQueue) {
-      try { await peer.addIceCandidate(candidate); } catch (e) {
-        console.warn("Queued ICE candidate failed:", e);
-      }
-    }
-    candidateQueue = [];
-  }
+  async function flushCandidateQueue(pc) { const queued = candidateQueue; candidateQueue = []; for (const candidate of queued) await pc.addIceCandidate(candidate); }
 
   async function handleSignalMessage(msg) {
     if (msg.type !== "SIGNAL" || !msg.data) return;
     const data = msg.data;
-    if (!peer) createPhonePeer();
-
+    const pc = await createPhonePeer();
     if (data.type === "offer" && data.offer) {
-      FF_DIAGNOSTIC.event("SIGNAL_OFFER_RECEIVED");
-      try {
-        await peer.setRemoteDescription(data.offer);
-        remoteDescriptionSet = true;
-        await flushCandidateQueue();
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        FF_DIAGNOSTIC.event("WEBRTC_ANSWER_CREATED_AND_SENT");
-        sendSignal({ type: "answer", answer: peer.localDescription });
-      } catch (error) {
-        FF_DIAGNOSTIC.event("WEBRTC_OFFER_ANSWER_ERROR", {
-          error: String(error)
-        });
-        console.error("WebRTC offer/answer error:", error);
-      }
-      return;
+      if (peer !== pc) return;
+      await pc.setRemoteDescription(data.offer); remoteDescriptionSet = true;
+      await flushCandidateQueue(pc);
+      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+      sendSignal({ type: "answer", answer: pc.localDescription }); return;
     }
-
     if (data.type === "candidate" && data.candidate) {
-      if (remoteDescriptionSet) {
-        try {
-          await peer.addIceCandidate(data.candidate);
-          FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_ADDED");
-        } catch (error) {
-          FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_FAILED", {
-            error: String(error)
-          });
-          console.warn("ICE candidate failed:", error);
-        }
-      } else {
-        candidateQueue.push(data.candidate);
-        FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_QUEUED", {
-          queueLength: candidateQueue.length
-        });
-      }
-    }
-  }
-
-  function handleGameMessage(raw) {
-    let msg;
-    try {
-      msg = JSON.parse(raw);
-    } catch (e) {
-      FF_DIAGNOSTIC.event("GAME_MESSAGE_PARSE_ERROR", {
-        raw,
-        error: String(e)
-      });
-      return;
-    }
-
-    FF_DIAGNOSTIC.event("GAME_MESSAGE_RECEIVED", { message: msg });
-    if (msg.type === "ARM") {
-      setArmed();
-      return;
-    }
-    if (msg.type === "LOCK") {
-      setLocked(msg.winnerTeam);
-      return;
-    }
-    if (msg.type === "RESET") {
-      FF_DIAGNOSTIC.event("RESET_RECEIVED");
-      setStandby("Waiting for next question...");
-      return;
-    }
-
-    if (
-      msg.type === "GAME_OVER" ||
-      msg.type === "END_GAME" ||
-      msg.type === "GAME_END"
-    ) {
-      FF_DIAGNOSTIC.event("GAME_OVER_MESSAGE_RECEIVED", {
-        message: msg
-      });
-      FF_DIAGNOSTIC.download("GAME_OVER_MESSAGE");
-      return;
+      if (peer !== pc) return;
+      if (remoteDescriptionSet) await pc.addIceCandidate(data.candidate); else candidateQueue.push(data.candidate);
     }
   }
 
@@ -917,7 +729,10 @@ peer.onicecandidateerror = (event) => {
 
       signalingWs.send(JSON.stringify(registration));
 
-      createPhonePeer();
+      createPhonePeer().catch((error) => {
+        FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_ERROR", { message: error?.message || String(error) });
+        console.error("Phone WebRTC setup failed:", error);
+      });
     };
 
     signalingWs.onmessage = async (event) => {
