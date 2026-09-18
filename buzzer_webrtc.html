@@ -596,9 +596,10 @@
     peerCreationPromise = (async () => {
       FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
       if (peer) closePeer();
-      const directIceServers = [];
-      FF_DIAGNOSTIC.event("DIRECT_ONLY_MODE", { turnExcluded: true, stunExcluded: true, iceServers: directIceServers });
-      const pc = new RTCPeerConnection({ iceServers: directIceServers, iceTransportPolicy: "all" });
+      
+      // FIXED: Using RTC_CONFIG to enable STUN instead of the empty array directIceServers = []
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      
       if (generation !== peerGeneration) { try { pc.close(); } catch (e) {} throw new Error("Stale peer creation discarded"); }
       peer = pc;
       FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
