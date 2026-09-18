@@ -641,6 +641,55 @@
     }
   }
 
+  function handleGameMessage(raw) {
+    let msg;
+    try {
+      msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch (error) {
+      FF_DIAGNOSTIC.event("GAME_MESSAGE_PARSE_ERROR", {
+        raw: String(raw),
+        error: error?.message || String(error)
+      });
+      console.error("Game message parse error:", error);
+      return;
+    }
+
+    FF_DIAGNOSTIC.event("GAME_MESSAGE_RECEIVED", {
+      type: msg?.type || null,
+      message: msg
+    });
+
+    if (!msg || !msg.type) return;
+
+    switch (msg.type) {
+      case "ARM":
+        setArmed();
+        break;
+
+      case "LOCK":
+        setLocked(msg.winnerTeam);
+        break;
+
+      case "RESET":
+        setStandby("Waiting for host...");
+        break;
+
+      case "GAME_OVER":
+        phoneArmed = false;
+        phoneBuzzed = false;
+        btn.disabled = true;
+        btn.className = "";
+        btn.textContent = "GAME OVER";
+        status.textContent = "Game finished.";
+        FF_DIAGNOSTIC.event("GAME_OVER_RECEIVED");
+        FF_DIAGNOSTIC.download("GAME_OVER");
+        break;
+
+      default:
+        FF_DIAGNOSTIC.event("GAME_MESSAGE_UNKNOWN", { type: msg.type });
+    }
+  }
+
   function buzz() {
     if (teamRejected) {
       FF_DIAGNOSTIC.event("BUZZ_IGNORED_TEAM_REJECTED");
