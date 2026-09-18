@@ -596,11 +596,11 @@
     peerCreationPromise = (async () => {
       FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
       if (peer) closePeer();
-      const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
-      if (!turnResponse.ok) throw new Error(`TURN credentials failed: ${turnResponse.status}`);
-      const turnData = await turnResponse.json();
-      FF_DIAGNOSTIC.event("TURN_CREDENTIALS_RECEIVED", { ok: true, iceServerCount: Array.isArray(turnData?.iceServers) ? turnData.iceServers.length : null });
-      const pc = new RTCPeerConnection({ iceServers: turnData.iceServers });
+      // DIRECT-ONLY DIAGNOSTIC: deliberately exclude Cloudflare TURN.
+      // Keep Google STUN so we can test host/srflx connectivity without relay.
+      const directIceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+      FF_DIAGNOSTIC.event("DIRECT_ONLY_MODE", { turnExcluded: true, iceServers: directIceServers });
+      const pc = new RTCPeerConnection({ iceServers: directIceServers, iceTransportPolicy: "all" });
       if (generation !== peerGeneration) { try { pc.close(); } catch (e) {} throw new Error("Stale peer creation discarded"); }
       peer = pc;
       FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
@@ -638,55 +638,6 @@
     if (data.type === "candidate" && data.candidate) {
       if (peer !== pc) return;
       if (remoteDescriptionSet) await pc.addIceCandidate(data.candidate); else candidateQueue.push(data.candidate);
-    }
-  }
-
-  function handleGameMessage(raw) {
-    let msg;
-    try {
-      msg = typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch (error) {
-      FF_DIAGNOSTIC.event("GAME_MESSAGE_PARSE_ERROR", {
-        raw: String(raw),
-        error: error?.message || String(error)
-      });
-      console.error("Game message parse error:", error);
-      return;
-    }
-
-    FF_DIAGNOSTIC.event("GAME_MESSAGE_RECEIVED", {
-      type: msg?.type || null,
-      message: msg
-    });
-
-    if (!msg || !msg.type) return;
-
-    switch (msg.type) {
-      case "ARM":
-        setArmed();
-        break;
-
-      case "LOCK":
-        setLocked(msg.winnerTeam);
-        break;
-
-      case "RESET":
-        setStandby("Waiting for host...");
-        break;
-
-      case "GAME_OVER":
-        phoneArmed = false;
-        phoneBuzzed = false;
-        btn.disabled = true;
-        btn.className = "";
-        btn.textContent = "GAME OVER";
-        status.textContent = "Game finished.";
-        FF_DIAGNOSTIC.event("GAME_OVER_RECEIVED");
-        FF_DIAGNOSTIC.download("GAME_OVER");
-        break;
-
-      default:
-        FF_DIAGNOSTIC.event("GAME_MESSAGE_UNKNOWN", { type: msg.type });
     }
   }
 
