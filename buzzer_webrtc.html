@@ -611,7 +611,16 @@
       pc.ondatachannel = (event) => {
         if (peer !== pc) return; channel = event.channel;
         FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", { label: channel.label, readyState: channel.readyState });
-        channel.onopen = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); FF_DIAGNOSTIC.startStats(pc); };
+        
+        channel.onopen = () => { 
+            if (peer !== pc) return; 
+            FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); 
+            FF_DIAGNOSTIC.startStats(pc); 
+
+            // ADD THIS LINE:
+            setStandby("Connected! Waiting for host...");
+        };
+        
         channel.onclose = () => FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", { label: channel.label });
         channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
         channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
