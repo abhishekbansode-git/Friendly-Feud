@@ -80,7 +80,6 @@
       font-size: 32px;
       font-weight: 900;
       color: rgba(255,255,255,0.5);
-      /* Dark unlit red */
       background: radial-gradient(circle at 35% 35%, #b71c1c, #4a0404);
       box-shadow: 
         0 20px 30px rgba(0,0,0,0.9),
@@ -108,7 +107,6 @@
 
     #buzz-btn.armed {
       color: #fff;
-      /* Bright glowing red */
       background: radial-gradient(circle at 35% 35%, #ff4d4d, #d32f2f);
       box-shadow: 
         0 15px 25px rgba(0,0,0,0.6),
@@ -158,14 +156,6 @@
   </div>
 
 <script>
-
-  /* ================================================================
-     FRIENDLY FEUD TEST DIAGNOSTIC LOGGER - PHONE
-     Local testing layer. Nothing is uploaded by this logger.
-     Records signaling, WebRTC/ICE, DIRECT vs TURN/RELAY, game events,
-     browser errors, network/visibility events and useful RTC stats.
-     Downloads automatically when the host sends GAME_OVER.
-     ================================================================ */
   const FF_DIAGNOSTIC = (() => {
     const entries = [];
     let sequence = 0;
@@ -597,7 +587,6 @@
       FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
       if (peer) closePeer();
       
-      // FIXED: Using RTC_CONFIG to enable STUN instead of the empty array directIceServers = []
       const pc = new RTCPeerConnection(RTC_CONFIG);
       
       if (generation !== peerGeneration) { try { pc.close(); } catch (e) {} throw new Error("Stale peer creation discarded"); }
@@ -608,14 +597,21 @@
       pc.onicegatheringstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_GATHERING_STATE", { state: pc.iceGatheringState }); };
       pc.onicecandidateerror = (event) => { if (peer !== pc) return; FF_DIAGNOSTIC.event("ICE_CANDIDATE_ERROR", { address: event.address || null, port: event.port || null, url: event.url || null, errorCode: event.errorCode || null, errorText: event.errorText || null }); };
       pc.onconnectionstatechange = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("WEBRTC_CONNECTION_STATE", { state: pc.connectionState }); };
+      
       pc.ondatachannel = (event) => {
         if (peer !== pc) return; channel = event.channel;
         FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", { label: channel.label, readyState: channel.readyState });
-        channel.onopen = () => { if (peer !== pc) return; FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); FF_DIAGNOSTIC.startStats(pc); };
+        channel.onopen = () => { 
+          if (peer !== pc) return; 
+          FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", { label: channel.label }); 
+          FF_DIAGNOSTIC.startStats(pc); 
+          setStandby("Connected! Waiting for host...");
+        };
         channel.onclose = () => FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", { label: channel.label });
         channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
         channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
       };
+      
       return pc;
     })().finally(() => { peerCreationPromise = null; });
     return peerCreationPromise;
@@ -886,10 +882,6 @@
   FF_DIAGNOSTIC.event("PHONE_READY");
   connectSignaling();
 
-  // Testing fallback: if the host sends any explicit game-over message, the
-  // handler above downloads immediately. The phone cannot reliably observe a
-  // host-only DOM state, so no automatic download is triggered merely because
-  // the phone page becomes hidden. This avoids false "game over" downloads.
 </script>
 
 </body>
