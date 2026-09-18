@@ -190,19 +190,23 @@
       }
     };
 
+    const safeGet = (fn, fallback = null) => {
+      try { return fn(); } catch (_) { return fallback; }
+    };
+
     const context = () => ({
-      room: typeof room !== "undefined" ? room : null,
-      team: typeof team !== "undefined" ? team + 1 : null,
+      room: safeGet(() => room),
+      team: safeGet(() => team + 1),
       online: navigator.onLine,
       visibility: document.visibilityState,
       userAgent: navigator.userAgent,
       screen: `${screen.width}x${screen.height}`,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       dpr: window.devicePixelRatio,
-      connectionLabel: typeof connLbl !== "undefined" ? connLbl.textContent : null,
-      armed: typeof phoneArmed !== "undefined" ? phoneArmed : null,
-      buzzed: typeof phoneBuzzed !== "undefined" ? phoneBuzzed : null,
-      rejected: typeof teamRejected !== "undefined" ? teamRejected : null
+      connectionLabel: safeGet(() => connLbl.textContent),
+      armed: safeGet(() => phoneArmed),
+      buzzed: safeGet(() => phoneBuzzed),
+      rejected: safeGet(() => teamRejected)
     });
 
     const add = (category, event, data = {}) => {
