@@ -149,6 +149,7 @@
   <div id="team-title">TEAM</div>
   <div id="status-text">Connecting to host...</div>
 
+  <button id="diag-download-btn" type="button" style="display:none;margin:0 auto 10px;padding:12px 18px;border:2px solid #ffeb85;border-radius:10px;background:#1f2937;color:#ffeb85;font-weight:700;font-size:14px;">DOWNLOAD DIAGNOSTIC LOG</button>
   <div class="wood-board">
     <div class="buzzer-container">
       <div class="podium">
@@ -497,6 +498,9 @@
   document.getElementById("team-title").style.color = color;
 
   const btn = document.getElementById("buzz-btn");
+  const diagDownloadBtn = document.getElementById("diag-download-btn");
+  diagDownloadBtn.style.display = "block";
+  diagDownloadBtn.addEventListener("click", () => FF_DIAGNOSTIC.download("MANUAL_PHONE_DOWNLOAD"));
   const status = document.getElementById("status-text");
   const connLbl = document.getElementById("conn-lbl");
 
