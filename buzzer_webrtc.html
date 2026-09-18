@@ -616,11 +616,6 @@
         channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
         channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
       };
-        
-        channel.onclose = () => FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", { label: channel.label });
-        channel.onerror = (error) => FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", { message: error?.message || String(error || "unknown") });
-        channel.onmessage = (event) => { if (peer !== pc) return; handleGameMessage(event.data); };
-      };
       return pc;
     })().finally(() => { peerCreationPromise = null; });
     return peerCreationPromise;
