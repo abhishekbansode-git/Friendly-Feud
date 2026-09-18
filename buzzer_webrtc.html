@@ -158,6 +158,293 @@
   </div>
 
 <script>
+
+  /* ================================================================
+     FRIENDLY FEUD TEST DIAGNOSTIC LOGGER - PHONE
+     Local testing layer. Nothing is uploaded by this logger.
+     Records signaling, WebRTC/ICE, DIRECT vs TURN/RELAY, game events,
+     browser errors, network/visibility events and useful RTC stats.
+     Downloads automatically when the host sends GAME_OVER.
+     ================================================================ */
+  const FF_DIAGNOSTIC = (() => {
+    const entries = [];
+    let sequence = 0;
+    let downloaded = false;
+    let statsTimer = null;
+    let lastPath = null;
+
+    const safeStringify = (value) => {
+      try {
+        if (value instanceof Error) {
+          return `${value.name}: ${value.message}\n${value.stack || ""}`;
+        }
+        if (typeof value === "string") return value;
+        return JSON.stringify(value, (key, val) => {
+          if (val instanceof Error) {
+            return { name: val.name, message: val.message, stack: val.stack };
+          }
+          return val;
+        });
+      } catch (_) {
+        try { return String(value); } catch (__) { return "[Unserializable]"; }
+      }
+    };
+
+    const context = () => ({
+      room: typeof room !== "undefined" ? room : null,
+      team: typeof team !== "undefined" ? team + 1 : null,
+      online: navigator.onLine,
+      visibility: document.visibilityState,
+      userAgent: navigator.userAgent,
+      screen: `${screen.width}x${screen.height}`,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      dpr: window.devicePixelRatio,
+      connectionLabel: typeof connLbl !== "undefined" ? connLbl.textContent : null,
+      armed: typeof phoneArmed !== "undefined" ? phoneArmed : null,
+      buzzed: typeof phoneBuzzed !== "undefined" ? phoneBuzzed : null,
+      rejected: typeof teamRejected !== "undefined" ? teamRejected : null
+    });
+
+    const add = (category, event, data = {}) => {
+      const item = {
+        seq: ++sequence,
+        time: new Date().toISOString(),
+        category,
+        event,
+        data,
+        context: context()
+      };
+      entries.push(item);
+      if (entries.length > 20000) entries.shift();
+      return item;
+    };
+
+    const event = (eventName, data = {}) => add("EVENT", eventName, data);
+
+    const originalConsole = {
+      log: console.log.bind(console),
+      info: console.info.bind(console),
+      warn: console.warn.bind(console),
+      error: console.error.bind(console)
+    };
+
+    ["log", "info", "warn", "error"].forEach((level) => {
+      console[level] = (...args) => {
+        add("CONSOLE", level.toUpperCase(), {
+          args: args.map(safeStringify)
+        });
+        originalConsole[level](...args);
+      };
+    });
+
+    window.addEventListener("error", (e) => {
+      add("BROWSER_ERROR", "WINDOW_ERROR", {
+        message: e.message,
+        source: e.filename,
+        line: e.lineno,
+        column: e.colno,
+        error: safeStringify(e.error)
+      });
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      add("BROWSER_ERROR", "UNHANDLED_REJECTION", {
+        reason: safeStringify(e.reason)
+      });
+    });
+
+    window.addEventListener("online", () => event("NETWORK_ONLINE"));
+    window.addEventListener("offline", () => event("NETWORK_OFFLINE"));
+    document.addEventListener("visibilitychange", () => {
+      event("VISIBILITY_CHANGED", { state: document.visibilityState });
+    });
+    window.addEventListener("pageshow", () => event("PAGE_SHOW"));
+    window.addEventListener("pagehide", () => event("PAGE_HIDE"));
+
+    const getPathInfo = async () => {
+      if (!peer) return null;
+
+      try {
+        const stats = await peer.getStats();
+        let selectedPair = null;
+
+        stats.forEach((report) => {
+          if (report.type === "transport" && report.selectedCandidatePairId) {
+            const pair = stats.get(report.selectedCandidatePairId);
+            if (pair) selectedPair = pair;
+          }
+        });
+
+        if (!selectedPair) {
+          stats.forEach((report) => {
+            if (
+              report.type === "candidate-pair" &&
+              report.state === "succeeded" &&
+              (report.selected || report.nominated)
+            ) {
+              selectedPair = report;
+            }
+          });
+        }
+
+        if (!selectedPair) {
+          stats.forEach((report) => {
+            if (
+              !selectedPair &&
+              report.type === "candidate-pair" &&
+              report.state === "succeeded"
+            ) {
+              selectedPair = report;
+            }
+          });
+        }
+
+        if (!selectedPair) {
+          return {
+            status: "NO_SELECTED_PAIR_YET",
+            connectionState: peer.connectionState,
+            iceConnectionState: peer.iceConnectionState,
+            iceGatheringState: peer.iceGatheringState
+          };
+        }
+
+        const local = stats.get(selectedPair.localCandidateId);
+        const remote = stats.get(selectedPair.remoteCandidateId);
+        const localType = local?.candidateType || "unknown";
+        const remoteType = remote?.candidateType || "unknown";
+        const isRelay = localType === "relay" || remoteType === "relay";
+
+        return {
+          status: "SELECTED",
+          path: isRelay ? "TURN / RELAY" : "DIRECT",
+          localCandidateType: localType,
+          remoteCandidateType: remoteType,
+          localProtocol: local?.protocol || null,
+          remoteProtocol: remote?.protocol || null,
+          relayProtocol: local?.relayProtocol || remote?.relayProtocol || null,
+          localAddress: local?.address || local?.ip || null,
+          remoteAddress: remote?.address || remote?.ip || null,
+          bytesSent: selectedPair.bytesSent ?? null,
+          bytesReceived: selectedPair.bytesReceived ?? null,
+          packetsSent: selectedPair.packetsSent ?? null,
+          packetsReceived: selectedPair.packetsReceived ?? null,
+          packetsLost: selectedPair.packetsLost ?? null,
+          currentRoundTripTime: selectedPair.currentRoundTripTime ?? null,
+          availableOutgoingBitrate: selectedPair.availableOutgoingBitrate ?? null,
+          availableIncomingBitrate: selectedPair.availableIncomingBitrate ?? null,
+          connectionState: peer.connectionState,
+          iceConnectionState: peer.iceConnectionState,
+          iceGatheringState: peer.iceGatheringState
+        };
+      } catch (error) {
+        return {
+          status: "STATS_ERROR",
+          error: safeStringify(error),
+          connectionState: peer?.connectionState,
+          iceConnectionState: peer?.iceConnectionState,
+          iceGatheringState: peer?.iceGatheringState
+        };
+      }
+    };
+
+    const recordPath = async (reason) => {
+      const path = await getPathInfo();
+      event("WEBRTC_STATS", { reason, ...path });
+
+      if (path?.status === "SELECTED") {
+        if (path.path !== lastPath) {
+          event("WEBRTC_PATH_CHANGED", {
+            path: path.path,
+            previousPath: lastPath,
+            reason,
+            localCandidateType: path.localCandidateType,
+            remoteCandidateType: path.remoteCandidateType,
+            relayProtocol: path.relayProtocol
+          });
+          lastPath = path.path;
+        }
+
+        event(
+          path.path === "TURN / RELAY"
+            ? "WEBRTC_PATH_TURN"
+            : "WEBRTC_PATH_DIRECT",
+          {
+            reason,
+            localCandidateType: path.localCandidateType,
+            remoteCandidateType: path.remoteCandidateType,
+            relayProtocol: path.relayProtocol
+          }
+        );
+      }
+    };
+
+    const startStats = () => {
+      if (statsTimer) clearInterval(statsTimer);
+      statsTimer = setInterval(() => recordPath("PERIODIC_5S"), 5000);
+      recordPath("CONNECTED");
+    };
+
+    const stopStats = () => {
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
+    };
+
+    const download = (reason = "GAME_OVER") => {
+      if (downloaded) return;
+      downloaded = true;
+      event("DIAGNOSTIC_DOWNLOAD", { reason });
+
+      const teamNumber = typeof team !== "undefined" ? team + 1 : "UNKNOWN";
+      const roomCode = typeof room !== "undefined" ? room : "UNKNOWN";
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+      const header = [
+        "FRIENDLY FEUD - PHONE DIAGNOSTIC LOG",
+        "=====================================",
+        `Generated: ${new Date().toString()}`,
+        `Reason: ${reason}`,
+        `Room: ${roomCode}`,
+        `Team: ${teamNumber}`,
+        "",
+        "This file contains diagnostic events captured locally on the phone.",
+        "No diagnostic data is sent to Cloudflare by this logger.",
+        ""
+      ].join("\n");
+
+      const body = entries.map((item) =>
+        `[${String(item.seq).padStart(5, "0")}] ${item.time} | ${item.category} | ${item.event} | DATA=${safeStringify(item.data)} | CONTEXT=${safeStringify(item.context)}`
+      ).join("\n");
+
+      const blob = new Blob([header + body + "\n"], {
+        type: "text/plain;charset=utf-8"
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `FriendlyFeud_Team${teamNumber}_${roomCode}_${stamp}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+
+    return {
+      event,
+      recordPath,
+      startStats,
+      stopStats,
+      download,
+      getEntries: () => entries.slice()
+    };
+  })();
+
+  FF_DIAGNOSTIC.event("DIAGNOSTIC_INITIALIZED", {
+    version: "phone-full-test-logger-v1"
+  });
+
   const SIGNALING_HOST = "friendly-feud-signaling.friendlyfeud.workers.dev";
   const RTC_CONFIG = {
     iceServers: [
@@ -186,6 +473,13 @@
   }
 
   team = Number(team);
+
+  FF_DIAGNOSTIC.event("PHONE_CONFIGURATION", {
+    room,
+    team: team + 1,
+    name,
+    color
+  });
 
   if (!room || room.length !== 4 || (team !== 0 && team !== 1)) {
     document.getElementById("status-text").textContent = "Invalid room or team. Please scan QR again.";
@@ -218,6 +512,8 @@
   let teamRejected = false;
 
   function setStandby(text = "Waiting for host...") {
+    FF_DIAGNOSTIC.event("SET_STANDBY", { text });
+
     phoneArmed = false;
     phoneBuzzed = false;
     btn.disabled = true;
@@ -227,7 +523,12 @@
   }
 
   function setArmed() {
-    if (teamRejected) return;
+    if (teamRejected) {
+      FF_DIAGNOSTIC.event("ARM_IGNORED_TEAM_REJECTED");
+      return;
+    }
+
+    FF_DIAGNOSTIC.event("ARM_RECEIVED");
 
     phoneArmed = true;
     phoneBuzzed = false;
@@ -239,6 +540,11 @@
   }
 
   function setLocked(winnerTeam) {
+    FF_DIAGNOSTIC.event("LOCK_RECEIVED", {
+      winnerTeam: Number(winnerTeam) + 1,
+      thisTeam: team + 1
+    });
+
     phoneArmed = false;
     btn.disabled = true;
     btn.classList.remove("armed", "countdown");
@@ -256,12 +562,24 @@
   }
 
   function sendSignal(data) {
-    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) return false;
+    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) {
+      FF_DIAGNOSTIC.event("SIGNAL_SEND_FAILED_WS_NOT_OPEN", { data });
+      return false;
+    }
+
+    FF_DIAGNOSTIC.event("SIGNAL_SENT", { data });
     signalingWs.send(JSON.stringify({ type: "SIGNAL", team, data }));
     return true;
   }
 
   function closePeer() {
+    FF_DIAGNOSTIC.event("PEER_CLOSE_REQUESTED", {
+      hadPeer: !!peer,
+      hadChannel: !!channel
+    });
+
+    FF_DIAGNOSTIC.stopStats();
+
     candidateQueue = [];
     remoteDescriptionSet = false;
     if (channel) {
@@ -275,6 +593,8 @@
   }
 
   async function createPhonePeer() {
+    FF_DIAGNOSTIC.event("WEBRTC_CREATE_PEER_STARTED");
+
     closePeer();
     const turnResponse = await fetch(`https://${SIGNALING_HOST}/turn-credentials`);
 
@@ -284,25 +604,56 @@
 
     const turnData = await turnResponse.json();
 
+    FF_DIAGNOSTIC.event("TURN_CREDENTIALS_RECEIVED", {
+      ok: true,
+      iceServerCount: Array.isArray(turnData?.iceServers)
+        ? turnData.iceServers.length
+        : null
+    });
+
     peer = new RTCPeerConnection({
       iceServers: turnData.iceServers
     });
 
+    FF_DIAGNOSTIC.event("WEBRTC_PEER_CREATED");
+
     peer.onicecandidate = (event) => {
       if (event.candidate) {
+        FF_DIAGNOSTIC.event("ICE_CANDIDATE_LOCAL", {
+          candidateType: event.candidate.type || null,
+          protocol: event.candidate.protocol || null
+        });
         sendSignal({ type: "candidate", candidate: event.candidate });
       }
     };
 
 peer.oniceconnectionstatechange = () => {
+    FF_DIAGNOSTIC.event("ICE_CONNECTION_STATE", {
+      state: peer.iceConnectionState
+    });
     console.log("Phone ICE state:", peer.iceConnectionState);
+
+    if (
+      peer.iceConnectionState === "connected" ||
+      peer.iceConnectionState === "completed"
+    ) {
+      FF_DIAGNOSTIC.recordPath("ICE_CONNECTED_OR_COMPLETED");
+    }
 };
 
 peer.onicegatheringstatechange = () => {
+    FF_DIAGNOSTIC.event("ICE_GATHERING_STATE", {
+      state: peer.iceGatheringState
+    });
     console.log("Phone ICE gathering:", peer.iceGatheringState);
 };
 
 peer.onicecandidateerror = (event) => {
+    FF_DIAGNOSTIC.event("ICE_CANDIDATE_ERROR", {
+      errorCode: event.errorCode,
+      url: event.url,
+      errorText: event.errorText
+    });
     console.error(
         "Phone ICE candidate ERROR:",
         event.errorCode,
@@ -312,8 +663,16 @@ peer.onicecandidateerror = (event) => {
 };
     peer.onconnectionstatechange = () => {
       if (!peer) return;
+
+      FF_DIAGNOSTIC.event("WEBRTC_CONNECTION_STATE", {
+        state: peer.connectionState
+      });
+
       console.log("Phone WebRTC state:", peer.connectionState);
       if (peer.connectionState === "connected") {
+        FF_DIAGNOSTIC.event("WEBRTC_CONNECTED");
+        FF_DIAGNOSTIC.startStats();
+
         connLbl.textContent = "WebRTC Connected";
         connLbl.style.color = "#22c55e";
         status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
@@ -327,22 +686,48 @@ peer.onicecandidateerror = (event) => {
     peer.ondatachannel = (event) => {
       channel = event.channel;
 
+      FF_DIAGNOSTIC.event("DATACHANNEL_RECEIVED", {
+        label: channel.label,
+        readyState: channel.readyState
+      });
+
       channel.onopen = () => {
+        FF_DIAGNOSTIC.event("DATACHANNEL_OPEN", {
+          label: channel.label,
+          readyState: channel.readyState
+        });
+        FF_DIAGNOSTIC.startStats();
+
         connLbl.textContent = "WebRTC Connected";
         connLbl.style.color = "#22c55e";
         status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
       };
 
-      channel.onmessage = (event) => handleGameMessage(event.data);
+      channel.onmessage = (event) => {
+        FF_DIAGNOSTIC.event("DATACHANNEL_MESSAGE_RECEIVED", {
+          raw: event.data
+        });
+        handleGameMessage(event.data);
+      };
 
       channel.onclose = () => {
+        FF_DIAGNOSTIC.event("DATACHANNEL_CLOSE", {
+          readyState: channel?.readyState
+        });
+        FF_DIAGNOSTIC.stopStats();
+
         channel = null;
         connLbl.textContent = "WebRTC Disconnected";
         connLbl.style.color = "#ef4444";
         if (!phoneArmed) status.textContent = "Reconnecting...";
       };
 
-      channel.onerror = (error) => console.error("Phone DataChannel error:", error);
+      channel.onerror = (error) => {
+        FF_DIAGNOSTIC.event("DATACHANNEL_ERROR", {
+          error: String(error)
+        });
+        console.error("Phone DataChannel error:", error);
+      };
     };
   }
 
@@ -362,14 +747,19 @@ peer.onicecandidateerror = (event) => {
     if (!peer) createPhonePeer();
 
     if (data.type === "offer" && data.offer) {
+      FF_DIAGNOSTIC.event("SIGNAL_OFFER_RECEIVED");
       try {
         await peer.setRemoteDescription(data.offer);
         remoteDescriptionSet = true;
         await flushCandidateQueue();
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
+        FF_DIAGNOSTIC.event("WEBRTC_ANSWER_CREATED_AND_SENT");
         sendSignal({ type: "answer", answer: peer.localDescription });
       } catch (error) {
+        FF_DIAGNOSTIC.event("WEBRTC_OFFER_ANSWER_ERROR", {
+          error: String(error)
+        });
         console.error("WebRTC offer/answer error:", error);
       }
       return;
@@ -377,18 +767,37 @@ peer.onicecandidateerror = (event) => {
 
     if (data.type === "candidate" && data.candidate) {
       if (remoteDescriptionSet) {
-        try { await peer.addIceCandidate(data.candidate); } catch (error) {
+        try {
+          await peer.addIceCandidate(data.candidate);
+          FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_ADDED");
+        } catch (error) {
+          FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_FAILED", {
+            error: String(error)
+          });
           console.warn("ICE candidate failed:", error);
         }
       } else {
         candidateQueue.push(data.candidate);
+        FF_DIAGNOSTIC.event("ICE_REMOTE_CANDIDATE_QUEUED", {
+          queueLength: candidateQueue.length
+        });
       }
     }
   }
 
   function handleGameMessage(raw) {
     let msg;
-    try { msg = JSON.parse(raw); } catch (e) { return; }
+    try {
+      msg = JSON.parse(raw);
+    } catch (e) {
+      FF_DIAGNOSTIC.event("GAME_MESSAGE_PARSE_ERROR", {
+        raw,
+        error: String(e)
+      });
+      return;
+    }
+
+    FF_DIAGNOSTIC.event("GAME_MESSAGE_RECEIVED", { message: msg });
     if (msg.type === "ARM") {
       setArmed();
       return;
@@ -398,16 +807,52 @@ peer.onicecandidateerror = (event) => {
       return;
     }
     if (msg.type === "RESET") {
+      FF_DIAGNOSTIC.event("RESET_RECEIVED");
       setStandby("Waiting for next question...");
+      return;
+    }
+
+    if (
+      msg.type === "GAME_OVER" ||
+      msg.type === "END_GAME" ||
+      msg.type === "GAME_END"
+    ) {
+      FF_DIAGNOSTIC.event("GAME_OVER_MESSAGE_RECEIVED", {
+        message: msg
+      });
+      FF_DIAGNOSTIC.download("GAME_OVER_MESSAGE");
+      return;
     }
   }
 
   function buzz() {
-    if (teamRejected) return;
-    if (!phoneArmed || phoneBuzzed) return;
-    if (!channel || channel.readyState !== "open") return;
+    if (teamRejected) {
+      FF_DIAGNOSTIC.event("BUZZ_IGNORED_TEAM_REJECTED");
+      return;
+    }
+
+    if (!phoneArmed) {
+      FF_DIAGNOSTIC.event("BUZZ_IGNORED_NOT_ARMED");
+      return;
+    }
+
+    if (phoneBuzzed) {
+      FF_DIAGNOSTIC.event("BUZZ_IGNORED_ALREADY_BUZZED");
+      return;
+    }
+
+    if (!channel || channel.readyState !== "open") {
+      FF_DIAGNOSTIC.event("BUZZ_IGNORED_DATACHANNEL_NOT_OPEN", {
+        readyState: channel?.readyState || null
+      });
+      return;
+    }
 
     phoneBuzzed = true;
+
+    FF_DIAGNOSTIC.event("BUZZ_SENT", {
+      timestamp: Date.now()
+    });
     phoneArmed = false;
     btn.disabled = true;
 
@@ -424,7 +869,15 @@ peer.onicecandidateerror = (event) => {
   });
 
   function connectSignaling() {
-    if (teamRejected) return;
+    if (teamRejected) {
+      FF_DIAGNOSTIC.event("SIGNAL_CONNECT_IGNORED_TEAM_REJECTED");
+      return;
+    }
+
+    FF_DIAGNOSTIC.event("SIGNAL_CONNECT_ATTEMPT", {
+      room,
+      team: team + 1
+    });
 
     if (signalingWs && (signalingWs.readyState === WebSocket.OPEN || signalingWs.readyState === WebSocket.CONNECTING)) return;
 
@@ -435,6 +888,8 @@ peer.onicecandidateerror = (event) => {
     signalingWs = new WebSocket("wss://" + SIGNALING_HOST + "/?room=" + encodeURIComponent(room));
 
     signalingWs.onopen = () => {
+      FF_DIAGNOSTIC.event("SIGNAL_WS_OPEN");
+
       if (teamRejected) {
         try { signalingWs.close(); } catch (e) {}
         return;
@@ -445,11 +900,18 @@ peer.onicecandidateerror = (event) => {
       connLbl.style.color = "#22c55e";
       status.textContent = "Connecting buzzer...";
 
-      signalingWs.send(JSON.stringify({
+      const registration = {
         type: "REGISTER_PHONE",
         team,
         name
-      }));
+      };
+
+      FF_DIAGNOSTIC.event("REGISTER_PHONE_SENT", {
+        team: team + 1,
+        name
+      });
+
+      signalingWs.send(JSON.stringify(registration));
 
       createPhonePeer();
     };
@@ -458,8 +920,17 @@ peer.onicecandidateerror = (event) => {
       try {
         const msg = JSON.parse(event.data);
 
+        FF_DIAGNOSTIC.event("SIGNAL_MESSAGE_RECEIVED", {
+          message: msg
+        });
+
         // Server rejected this phone because its team is already occupied.
         if (msg.type === "TEAM_OCCUPIED") {
+          FF_DIAGNOSTIC.event("TEAM_OCCUPIED_REJECTED", {
+            team: team + 1,
+            message: msg
+          });
+
           teamRejected = true;
           clearTimeout(reconnectTimer);
           closePeer();
@@ -474,17 +945,29 @@ peer.onicecandidateerror = (event) => {
 
         await handleSignalMessage(msg);
       } catch (error) {
+        FF_DIAGNOSTIC.event("SIGNAL_MESSAGE_ERROR", {
+          error: String(error)
+        });
         console.error("Signaling message error:", error);
       }
     };
 
     signalingWs.onerror = (error) => {
+      FF_DIAGNOSTIC.event("SIGNAL_WS_ERROR", {
+        error: String(error)
+      });
       console.error("Signaling error:", error);
       connLbl.textContent = "Signaling Error";
       connLbl.style.color = "#ef4444";
     };
 
-    signalingWs.onclose = () => {
+    signalingWs.onclose = (event) => {
+      FF_DIAGNOSTIC.event("SIGNAL_WS_CLOSE", {
+        code: event?.code,
+        reason: event?.reason,
+        wasClean: event?.wasClean
+      });
+
       closePeer();
 
       // Do NOT reconnect after the server has rejected this team.
@@ -506,7 +989,13 @@ peer.onicecandidateerror = (event) => {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       if (!teamRejected) connectSignaling();
-      if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
+      if ("wakeLock" in navigator) {
+        navigator.wakeLock.request("screen")
+          .then(() => FF_DIAGNOSTIC.event("WAKE_LOCK_ACQUIRED"))
+          .catch((error) => FF_DIAGNOSTIC.event("WAKE_LOCK_FAILED", {
+            error: String(error)
+          }));
+      }
     }
   });
 
@@ -518,10 +1007,22 @@ peer.onicecandidateerror = (event) => {
     if (!teamRejected) connectSignaling();
   });
 
-  if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {});
+  if ("wakeLock" in navigator) {
+    navigator.wakeLock.request("screen")
+      .then(() => FF_DIAGNOSTIC.event("WAKE_LOCK_ACQUIRED_INITIAL"))
+      .catch((error) => FF_DIAGNOSTIC.event("WAKE_LOCK_FAILED_INITIAL", {
+        error: String(error)
+      }));
+  }
 
   setStandby();
+  FF_DIAGNOSTIC.event("PHONE_READY");
   connectSignaling();
+
+  // Testing fallback: if the host sends any explicit game-over message, the
+  // handler above downloads immediately. The phone cannot reliably observe a
+  // host-only DOM state, so no automatic download is triggered merely because
+  // the phone page becomes hidden. This avoids false "game over" downloads.
 </script>
 
 </body>
