@@ -208,7 +208,7 @@
 
   <div class="header">
     <span>
-      Room: <b id="room-lbl">-</b>
+      FRIENDLY FEUD
     </span>
 
     <span id="conn-lbl">
@@ -349,10 +349,10 @@
     color
   );
 
-  document.getElementById(
-    "room-lbl"
-  ).textContent =
-    room;
+  const roomLbl = document.getElementById("room-lbl");
+  if (roomLbl) {
+    roomLbl.textContent = room;
+  }
 
   document.getElementById(
     "team-title"
@@ -884,7 +884,7 @@
         ) {
 
           connLbl.textContent =
-            "WebRTC Connected";
+            "Connected";
 
           connLbl.style.color =
             "#22c55e";
@@ -908,7 +908,7 @@
         ) {
 
           connLbl.textContent =
-            "WebRTC Disconnected";
+            "Disconnected";
 
           connLbl.style.color =
             "#ef4444";
@@ -988,7 +988,7 @@
 
 
             connLbl.textContent =
-              "WebRTC Connected";
+              "Connected";
 
             connLbl.style.color =
               "#22c55e";
@@ -1052,7 +1052,7 @@
 
 
             connLbl.textContent =
-              "WebRTC Disconnected";
+              "Disconnected";
 
             connLbl.style.color =
               "#ef4444";
