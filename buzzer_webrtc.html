@@ -31,10 +31,22 @@
     .header {
       display: flex;
       justify-content: space-between;
-      font-size: 14px;
-      opacity: 0.8;
+      align-items: center;
+      font-size: 15px;
       font-family: monospace;
       color: #ffeb85;
+    }
+
+    .header-brand {
+      font-weight: 900;
+      font-size: 16px;
+      letter-spacing: 1px;
+      color: #ffeb85;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+
+    #conn-lbl {
+      font-weight: 800;
     }
 
     #team-title {
@@ -207,8 +219,8 @@
 <body>
 
   <div class="header">
-    <span>
-      <b>FRIENDLY FEUD BUZZER</b>
+    <span class="header-brand">
+      FRIENDLY FEUD BUZZER
     </span>
 
     <span id="conn-lbl">
