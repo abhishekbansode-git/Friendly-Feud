@@ -667,6 +667,55 @@
 
 
   // ============================================================
+  // WAIT FOR ICE GATHERING
+  // ============================================================
+
+  function waitForIceGatheringComplete(pc, timeout = 10000) {
+
+    if (pc.iceGatheringState === "complete") {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+
+      let finished = false;
+
+      const finish = () => {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        pc.removeEventListener(
+          "icegatheringstatechange",
+          check
+        );
+
+        clearTimeout(timer);
+
+        resolve();
+      };
+
+      const check = () => {
+
+        if (pc.iceGatheringState === "complete") {
+          finish();
+        }
+      };
+
+      const timer = setTimeout(finish, timeout);
+
+      pc.addEventListener(
+        "icegatheringstatechange",
+        check
+      );
+    });
+  }
+
+
+  // ============================================================
   // CREATE PHONE WEBRTC PEER
   // ============================================================
 
@@ -819,15 +868,11 @@
           return;
         }
 
-
-        if (event.candidate) {
-
-          sendSignal({
-            type: "candidate",
-            candidate:
-              event.candidate
-          });
-        }
+        /*
+         * Non-trickle ICE:
+         * candidates are gathered into the local SDP.
+         * The complete answer is sent after gathering finishes.
+         */
       };
 
 
@@ -1385,6 +1430,14 @@
         );
 
 
+        /*
+         * Non-trickle ICE:
+         * wait for all local candidates to be gathered into the SDP.
+         */
+
+        await waitForIceGatheringComplete(pc);
+
+
         if (
           pc !== peer
         ) {
@@ -1405,7 +1458,7 @@
 
 
         console.log(
-          "Phone sent WebRTC ANSWER"
+          "Phone sent complete WebRTC ANSWER"
         );
 
 
