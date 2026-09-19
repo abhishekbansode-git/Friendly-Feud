@@ -78,6 +78,15 @@
       align-items: center;
       justify-content: center;
       position: relative;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .wood-board.buzzed {
+      border-color: #22c55e !important;
+      box-shadow:
+        0 0 40px rgba(34, 197, 94, 0.8),
+        0 0 80px rgba(34, 197, 94, 0.4),
+        inset 0 0 40px rgba(0,0,0,0.8) !important;
     }
 
     .buzzer-container {
@@ -224,7 +233,7 @@
     Connecting to host...
   </div>
 
-  <div class="wood-board">
+  <div class="wood-board" id="wood-board">
     <div class="buzzer-container">
       <div class="podium">
         <button id="buzz-btn" disabled>
@@ -380,6 +389,11 @@
       "conn-lbl"
     );
 
+  const woodBoard =
+    document.getElementById(
+      "wood-board"
+    );
+
 
   // ============================================================
   // SIGNALING / WEBRTC STATE
@@ -459,6 +473,10 @@
     btn.textContent = "STANDBY";
 
     status.textContent = text;
+
+    if (woodBoard) {
+      woodBoard.classList.remove("buzzed");
+    }
   }
 
 
@@ -479,6 +497,10 @@
     btn.textContent = "BUZZ!";
 
     status.textContent = "TAP NOW!";
+
+    if (woodBoard) {
+      woodBoard.classList.remove("buzzed");
+    }
 
     navigator.vibrate?.([
       80,
@@ -508,6 +530,10 @@
         "winner"
       );
 
+      if (woodBoard) {
+        woodBoard.classList.add("buzzed");
+      }
+
       btn.textContent =
         "YOU BUZZED!";
 
@@ -525,6 +551,10 @@
       btn.classList.remove(
         "winner"
       );
+
+      if (woodBoard) {
+        woodBoard.classList.remove("buzzed");
+      }
 
       btn.textContent =
         "LOCKED OUT";
@@ -1550,6 +1580,10 @@
 
     btn.disabled = true;
 
+    if (woodBoard) {
+      woodBoard.classList.add("buzzed");
+    }
+
 
     try {
 
@@ -1586,6 +1620,10 @@
       phoneArmed = true;
 
       btn.disabled = false;
+
+      if (woodBoard) {
+        woodBoard.classList.remove("buzzed");
+      }
     }
   }
 
