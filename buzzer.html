@@ -3,21 +3,77 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
-  <title>Buzzer</title>
+  <title>Friendly Feud Buzzer</title>
+
   <style>
-    * { box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-    body { margin:0; height:100dvh; display:flex; flex-direction:column; padding:20px; background:radial-gradient(ellipse at top, #0f4c81 0%, #031533 60%, #010a1a 100%); color:#fff; font-family:sans-serif; }
-    .header { display:flex; justify-content:space-between; font-size:14px; opacity:0.8; font-family: monospace; color: #ffeb85; }
-    #team-title { font-size:40px; font-weight:900; text-align:center; margin:15px 0 5px 0; text-shadow: 0 4px 10px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 2px; }
-    #status-text { text-align:center; font-size:18px; margin-bottom:20px; color: #ffeb85; text-shadow: 0 2px 4px rgba(0,0,0,0.8); opacity: 0.9; }
-    
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      outline: none;
+    }
+
+    button:focus,
+    button:active,
+    #buzz-btn:focus,
+    #buzz-btn:active {
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      background: radial-gradient(
+        ellipse at top,
+        #0f4c81 0%,
+        #031533 60%,
+        #010a1a 100%
+      );
+      color: #fff;
+      font-family: sans-serif;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      opacity: 0.8;
+      font-family: monospace;
+      color: #ffeb85;
+    }
+
+    #team-title {
+      font-size: 40px;
+      font-weight: 900;
+      text-align: center;
+      margin: 15px 0 5px 0;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    #status-text {
+      text-align: center;
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #ffeb85;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      opacity: 0.9;
+    }
+
     .wood-board {
       flex: 1;
       margin: 10px 0;
       border: 6px solid #ffd700;
       border-radius: 30px;
       background: #5c3a21;
-      background-image: 
+      background-image:
         repeating-linear-gradient(
           0deg,
           transparent,
@@ -26,20 +82,33 @@
           rgba(0,0,0,0.1) 30px
         ),
         linear-gradient(180deg, #6b4324, #2a170a);
-      box-shadow: 
+      box-shadow:
         0 0 30px rgba(255, 215, 0, 0.5),
         inset 0 0 40px rgba(0,0,0,0.8);
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .wood-board.buzzed {
+      border-color: #22c55e !important;
+      box-shadow:
+        0 0 40px rgba(34, 197, 94, 0.8),
+        0 0 80px rgba(34, 197, 94, 0.4),
+        inset 0 0 40px rgba(0,0,0,0.8) !important;
     }
 
     .buzzer-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at center, rgba(255, 215, 0, 0.1) 0%, transparent 60%);
+      background: radial-gradient(
+        circle at center,
+        rgba(255, 215, 0, 0.1) 0%,
+        transparent 60%
+      );
       width: 100%;
       height: 100%;
     }
@@ -49,8 +118,8 @@
       width: var(--size);
       height: var(--size);
       border-radius: 50%;
-      background: linear-gradient(135deg, #0d47a1, #0a1f44); /* Blue base */
-      box-shadow: 
+      background: linear-gradient(135deg, #0d47a1, #0a1f44);
+      box-shadow:
         0 30px 60px -15px rgba(0,0,0,1),
         inset 0 4px 8px rgba(255,255,255,0.3),
         inset 0 -5px 15px rgba(0,0,0,0.9);
@@ -67,7 +136,7 @@
       width: calc(var(--size) - 20px);
       height: calc(var(--size) - 20px);
       border-radius: 50%;
-      background: linear-gradient(to bottom, #1565c0, #0a2656); /* Top of blue base */
+      background: linear-gradient(to bottom, #1565c0, #0a2656);
       box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
       z-index: 1;
     }
@@ -80,9 +149,12 @@
       font-size: 32px;
       font-weight: 900;
       color: rgba(255,255,255,0.5);
-      /* Dark unlit red */
-      background: radial-gradient(circle at 35% 35%, #b71c1c, #4a0404);
-      box-shadow: 
+      background: radial-gradient(
+        circle at 35% 35%,
+        #b71c1c,
+        #4a0404
+      );
+      box-shadow:
         0 20px 30px rgba(0,0,0,0.9),
         inset 0 -15px 25px rgba(0,0,0,0.7),
         inset 0 10px 20px rgba(255,255,255,0.2);
@@ -94,12 +166,16 @@
       outline: none;
     }
 
-    #buzz-btn.countdown { 
-      opacity: 0.9; 
-      background: radial-gradient(circle at 35% 35%, #fde047, #ca8a04); 
-      color: #000; 
-      font-size: 48px; 
-      box-shadow: 
+    #buzz-btn.countdown {
+      opacity: 0.9;
+      background: radial-gradient(
+        circle at 35% 35%,
+        #fde047,
+        #ca8a04
+      );
+      color: #000;
+      font-size: 48px;
+      box-shadow:
         0 15px 25px rgba(0,0,0,0.6),
         0 0 50px #eab308,
         inset 0 -15px 25px rgba(0,0,0,0.4),
@@ -108,9 +184,12 @@
 
     #buzz-btn.armed {
       color: #fff;
-      /* Bright glowing red */
-      background: radial-gradient(circle at 35% 35%, #ff4d4d, #d32f2f);
-      box-shadow: 
+      background: radial-gradient(
+        circle at 35% 35%,
+        #ff4d4d,
+        #d32f2f
+      );
+      box-shadow:
         0 15px 25px rgba(0,0,0,0.6),
         0 0 50px #ff0000,
         inset 0 -15px 25px rgba(0,0,0,0.4),
@@ -121,17 +200,26 @@
 
     #buzz-btn.armed:active {
       top: 0px;
-      box-shadow: 
+      box-shadow:
         0 5px 10px rgba(0,0,0,0.8),
         0 0 60px #ff0000,
         inset 0 -5px 15px rgba(0,0,0,0.6),
         inset 0 5px 15px rgba(255,255,255,0.5);
     }
 
+    .game-over-screen { position: fixed; inset: 0; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(ellipse at top, #0f4c81 0%, #031533 60%, #010a1a 100%); }
+    .game-over-screen.active { display: flex; }
+    .game-over-screen h1 { margin: 0; color: #ffeb85; font-size: clamp(42px, 12vw, 86px); font-weight: 900; letter-spacing: 3px; text-shadow: 0 5px 18px rgba(0,0,0,0.8); }
+    .game-over-screen p { margin-top: 18px; font-size: clamp(16px, 4vw, 24px); color: #fff; opacity: 0.85; }
+
     #buzz-btn.winner {
       color: #fff;
-      background: radial-gradient(circle at 35% 35%, #86efac, #22c55e) !important;
-      box-shadow: 
+      background: radial-gradient(
+        circle at 35% 35%,
+        #86efac,
+        #22c55e
+      ) !important;
+      box-shadow:
         0 5px 10px rgba(0,0,0,0.8),
         0 0 100px #22c55e,
         inset 0 -5px 15px rgba(0,0,0,0.6),
@@ -140,203 +228,1943 @@
     }
   </style>
 </head>
+
 <body>
+
   <div class="header">
-    <span>Room: <b id="room-lbl">-</b></span>
-    <span id="conn-lbl">Connecting...</span>
+    <span>
+      <b>FRIENDLY FEUD BUZZER</b>
+    </span>
+
+    <span id="conn-lbl">
+      Connecting...
+    </span>
   </div>
 
-  <div id="team-title">TEAM</div>
-  <div id="status-text">Connecting to host...</div>
+  <div id="team-title">
+    TEAM
+  </div>
 
-  <div class="wood-board">
+  <div id="status-text">
+    Connecting to host...
+  </div>
+
+  <div class="wood-board" id="wood-board">
     <div class="buzzer-container">
       <div class="podium">
-        <button id="buzz-btn" disabled>STANDBY</button>
+        <button id="buzz-btn" disabled>
+          STANDBY
+        </button>
       </div>
     </div>
   </div>
 
-<script>
-  const BACKEND_HOST = "feud-backend.feud-buzz-app.workers.dev";
-  const params = new URLSearchParams(window.location.search);
+  <div id="game-over-screen" class="game-over-screen" aria-live="polite">
+    <h1>GAME OVER</h1>
+    <p>Thanks for playing!</p>
+  </div>
 
-  // If a room parameter is present in the URL, FORCE overwrite localStorage
+
+<script>
+
+  // ============================================================
+  // CONFIGURATION
+  // ============================================================
+
+  const SIGNALING_HOST =
+    "friendly-feud-signaling.friendlyfeud.workers.dev";
+
+
+  // ============================================================
+  // URL / LOCAL STORAGE
+  // ============================================================
+
+  const params =
+    new URLSearchParams(window.location.search);
+
   let room = params.get("room");
   let team = params.get("team");
   let name = params.get("name");
   let color = params.get("color");
 
+
   if (room) {
+
     room = room.toUpperCase();
-    localStorage.setItem("feud_room", room);
-    if (team !== null) localStorage.setItem("feud_team", team);
-    if (name) localStorage.setItem("feud_name", name);
-    if (color) localStorage.setItem("feud_color", color);
+
+    localStorage.setItem(
+      "feud_room",
+      room
+    );
+
+    if (team !== null) {
+      localStorage.setItem(
+        "feud_team",
+        team
+      );
+    }
+
+    if (name) {
+      localStorage.setItem(
+        "feud_name",
+        name
+      );
+    }
+
+    if (color) {
+      localStorage.setItem(
+        "feud_color",
+        color
+      );
+    }
+
   } else {
-    // Fall back to storage only if URL had no parameters
-    room = (localStorage.getItem("feud_room") || "").toUpperCase();
-    team = localStorage.getItem("feud_team") || "0";
-    name = localStorage.getItem("feud_name") || `Team ${parseInt(team) + 1}`;
-    color = localStorage.getItem("feud_color") || "#3b82f6";
+
+    room =
+      (
+        localStorage.getItem("feud_room") ||
+        ""
+      ).toUpperCase();
+
+    team =
+      localStorage.getItem("feud_team") ||
+      "0";
+
+    name =
+      localStorage.getItem("feud_name") ||
+      "Team " +
+      (parseInt(team, 10) + 1);
+
+    color =
+      localStorage.getItem("feud_color") ||
+      "#3b82f6";
   }
 
-  // Guard: if no room anywhere, alert user
-  if (!room || room.length !== 4) {
-    document.getElementById("status-text").textContent = "Invalid or missing room code. Please scan QR again.";
-    document.getElementById("conn-lbl").textContent = "No Room";
-    throw new Error("Invalid room code");
+
+  team = Number(team);
+
+
+  // ============================================================
+  // VALIDATION
+  // ============================================================
+
+  if (
+    !room ||
+    room.length !== 4 ||
+    (team !== 0 && team !== 1)
+  ) {
+
+    document.getElementById(
+      "status-text"
+    ).textContent =
+      "Invalid room or team. Please scan QR again.";
+
+    document.getElementById(
+      "conn-lbl"
+    ).textContent =
+      "Invalid";
+
+    throw new Error(
+      "Invalid room/team"
+    );
   }
 
-  // UI Setup
-  document.documentElement.style.setProperty("--team-color", color);
-  document.getElementById("room-lbl").textContent = room;
-  document.getElementById("team-title").textContent = name;
-  document.getElementById("team-title").style.color = color;
 
-  const btn = document.getElementById("buzz-btn");
-  const status = document.getElementById("status-text");
-  const connLbl = document.getElementById("conn-lbl");
+  // ============================================================
+  // UI REFERENCES
+  // ============================================================
 
-  // Keep screen awake
-  if ('wakeLock' in navigator) {
-    navigator.wakeLock.request('screen').catch(() => {});
+  document.documentElement.style.setProperty(
+    "--team-color",
+    color
+  );
+
+  const roomLbl = document.getElementById("room-lbl");
+  if (roomLbl) {
+    roomLbl.textContent = room;
   }
 
-  // 2. Resilient WebSocket Manager
-  let ws = null;
-  let reconnectTimeout = null;
-  let countdownTimer = null;
-  let pingTimer = null;
-  let retryDelay = 1000;      // Initial delay: 1 second
-  const MAX_RETRY_DELAY = 15000; // Cap delay at 15 seconds
-  function connect() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+  document.getElementById(
+    "team-title"
+  ).textContent =
+    name;
+
+  document.getElementById(
+    "team-title"
+  ).style.color =
+    color;
+
+
+  const btn =
+    document.getElementById(
+      "buzz-btn"
+    );
+
+  const status =
+    document.getElementById(
+      "status-text"
+    );
+
+  const connLbl =
+    document.getElementById(
+      "conn-lbl"
+    );
+
+  const woodBoard =
+    document.getElementById(
+      "wood-board"
+    );
+
+  const gameOverScreen = document.getElementById("game-over-screen");
+
+
+  // ============================================================
+  // BUZZER AUDIO: Sound is played on the host screen (FF_CE1_v2.html)
+  // ============================================================
+  function playBuzzerSound() {}
+  window.playBuzzerSound = playBuzzerSound;
+
+
+
+  // ============================================================
+  // SIGNALING / WEBRTC STATE
+  // ============================================================
+
+  let signalingWs = null;
+
+  let peer = null;
+
+  let channel = null;
+
+  let candidateQueue = [];
+
+  let remoteDescriptionSet = false;
+
+
+  /*
+   * IMPORTANT FIX
+   *
+   * Only one peer creation operation may happen at a time.
+   */
+  let peerCreationPromise = null;
+
+
+  /*
+   * Every peer gets a generation number.
+   *
+   * Events belonging to an old peer are ignored after
+   * that peer has been replaced or closed.
+   */
+  let peerGeneration = 0;
+
+
+  // ============================================================
+  // SIGNALING RECONNECT STATE
+  // ============================================================
+
+  let reconnectTimer = null;
+
+  let retryDelay = 1000;
+
+  const MAX_RETRY_DELAY = 15000;
+
+
+  // ============================================================
+  // GAME STATE
+  // ============================================================
+
+  let phoneArmed = false;
+
+  let phoneBuzzed = false;
+
+  let gameOver = false;
+
+
+  /*
+   * Prevent a phone rejected by the server from repeatedly
+   * reconnecting.
+   */
+  let teamRejected = false;
+
+
+  // ============================================================
+  // UI FUNCTIONS
+  // ============================================================
+
+  function setGameOver() {
+    gameOver = true;
+    phoneArmed = false;
+    phoneBuzzed = false;
+    btn.disabled = true;
+    btn.className = "";
+    btn.textContent = "GAME OVER";
+    status.textContent = "Game finished";
+    if (woodBoard) woodBoard.classList.remove("buzzed");
+    if (gameOverScreen) gameOverScreen.classList.add("active");
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (signalingWs) { try { signalingWs.close(); } catch (error) {} }
+  }
+
+
+  function setStandby(
+    text = "Waiting for host..."
+  ) {
+
+    if (gameOver) return;
+
+    phoneArmed = false;
+
+    phoneBuzzed = false;
+
+    btn.disabled = true;
+
+    btn.className = "";
+
+    btn.textContent = "STANDBY";
+
+    status.textContent = text;
+
+    if (woodBoard) {
+      woodBoard.classList.remove("buzzed");
+    }
+  }
+
+
+  function setArmed() {
+
+    if (teamRejected || gameOver) {
       return;
     }
 
-    clearTimeout(reconnectTimeout);
-    clearInterval(pingTimer);
-    connLbl.textContent = "Reconnecting...";
-    ws = new WebSocket(`wss://${BACKEND_HOST}/?room=${room}`);
+    phoneArmed = true;
 
-    ws.onopen = () => {
-      retryDelay = 1000; // Reset backoff on successful connection
-      connLbl.textContent = "Online";
-      status.textContent = "Connected. Waiting for host...";
-      ws.send(JSON.stringify({ type: "REGISTER_PLAYER", team, name }));
-      clearInterval(pingTimer);
-    };
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "PONG") {
-        return; 
-      }
+    phoneBuzzed = false;
 
-      // Restore active state if reconnecting mid-game
-      if (data.type === "ROOM_STATE") {
-        if (data.isArmed && !data.winner) {
-          btn.disabled = false;
-          btn.className = "armed";
-          btn.textContent = "BUZZ!";
-          status.textContent = "TAP NOW!";
+    btn.disabled = false;
 
-          // Start pinging while armed
-          clearInterval(pingTimer);
-          pingTimer = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "PING" }));
-            }
-          }, 7000);
-        }
-      }
+    btn.className = "armed";
 
-      // Unlock buzzer
-      if (data.type === "ARMED") {
-        btn.disabled = false;
-        btn.className = "armed";
-        btn.textContent = "BUZZ!";
-        status.textContent = "TAP NOW!";
-        navigator.vibrate?.([80, 40, 80]);
+    btn.textContent = "BUZZ!";
 
-        // Start pinging while armed
-        clearInterval(pingTimer);
-        pingTimer = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "PING" }));
-          }
-        }, 7000);
-      }
+    status.textContent = "TAP NOW!";
 
-      // Lock out
-      if (data.type === "LOCKED") {
-        clearInterval(countdownTimer);
-        clearInterval(pingTimer); // Stop pinging to allow backend to hibernate
-        btn.disabled = true;
-        btn.classList.remove("armed", "countdown");
-        if (data.winner.team === team) {
-          btn.classList.add("winner");
-          btn.textContent = "YOU BUZZED!";
-          status.textContent = "You got in first! Answer now.";
-          navigator.vibrate?.([100, 50, 100]);
-        } else {
-          btn.textContent = "LOCKED OUT";
-          status.textContent = `${data.winner.name} buzzed first!`;
-        }
-      }
+    if (woodBoard) {
+      woodBoard.classList.remove("buzzed");
+    }
 
-      // Reset
-      if (data.type === "RESET") {
-        clearInterval(countdownTimer);
-        clearInterval(pingTimer); // Stop pinging to allow backend to hibernate
-        btn.disabled = true;
-        btn.className = "";
-        btn.textContent = "STANDBY";
-        status.textContent = "Waiting for next question...";
-      }
-    };
-
-    ws.onclose = () => {
-      clearInterval(pingTimer);
-      connLbl.textContent = "Offline";
-      status.textContent = `Disconnected. Retrying in ${(retryDelay / 1000).toFixed(0)}s...`;
-
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = setTimeout(connect, retryDelay);
-
-      // Double the wait time for subsequent failures, capped at 15s
-      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
-    };
-
-    ws.onerror = (err) => {
-      console.error("WS Error:", err);
-      connLbl.textContent = "Error";
-      status.textContent = "Connection refused by server. Check room code.";
-    };
+    navigator.vibrate?.([
+      80,
+      40,
+      80
+    ]);
   }
-  // 3. Re-engage on Phone Tab Switching / App Unlocking
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      connect();
-      if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen').catch(() => {});
+
+
+  function setLocked(winnerTeam) {
+
+    phoneArmed = false;
+
+    btn.disabled = true;
+
+    btn.classList.remove(
+      "armed",
+      "countdown"
+    );
+
+
+    if (
+      Number(winnerTeam) === team
+    ) {
+
+      btn.classList.add(
+        "winner"
+      );
+
+      if (woodBoard) {
+        woodBoard.classList.add("buzzed");
+      }
+
+      btn.textContent =
+        "YOU BUZZED!";
+
+      status.textContent =
+        "You got in first! Answer now.";
+
+      navigator.vibrate?.([
+        100,
+        50,
+        100
+      ]);
+
+    } else {
+
+      btn.classList.remove(
+        "winner"
+      );
+
+      if (woodBoard) {
+        woodBoard.classList.remove("buzzed");
+      }
+
+      btn.textContent =
+        "LOCKED OUT";
+
+      status.textContent =
+        "Other team buzzed first!";
+    }
+  }
+
+
+  // ============================================================
+  // SIGNALING SEND
+  // ============================================================
+
+  function sendSignal(data) {
+
+    if (
+      !signalingWs ||
+      signalingWs.readyState !==
+        WebSocket.OPEN
+    ) {
+      return false;
+    }
+
+
+    try {
+
+      signalingWs.send(
+        JSON.stringify({
+          type: "SIGNAL",
+          team,
+          data
+        })
+      );
+
+      return true;
+
+    } catch (error) {
+
+      console.error(
+        "Failed to send signaling message:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+
+  // ============================================================
+  // CLOSE WEBRTC PEER
+  // ============================================================
+
+  function closePeer() {
+
+    /*
+     * Increment generation FIRST.
+     *
+     * This immediately makes all events from the old peer
+     * stale.
+     */
+    peerGeneration++;
+
+
+    candidateQueue = [];
+
+    remoteDescriptionSet = false;
+
+
+    if (channel) {
+
+      try {
+        channel.close();
+      } catch (e) {}
+
+    }
+
+    channel = null;
+
+
+    if (peer) {
+
+      try {
+        peer.close();
+      } catch (e) {}
+
+    }
+
+    peer = null;
+  }
+
+
+  // ============================================================
+  // WAIT FOR ICE GATHERING
+  // ============================================================
+
+  function waitForIceGatheringComplete(pc, timeout = 10000) {
+
+    if (pc.iceGatheringState === "complete") {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+
+      let finished = false;
+
+      const finish = () => {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        pc.removeEventListener(
+          "icegatheringstatechange",
+          check
+        );
+
+        clearTimeout(timer);
+
+        resolve();
+      };
+
+      const check = () => {
+
+        if (pc.iceGatheringState === "complete") {
+          finish();
+        }
+      };
+
+      const timer = setTimeout(finish, timeout);
+
+      pc.addEventListener(
+        "icegatheringstatechange",
+        check
+      );
+    });
+  }
+
+
+  // ============================================================
+  // CREATE PHONE WEBRTC PEER
+  // ============================================================
+
+  async function createPhonePeer() {
+
+    /*
+     * Close any existing peer before creating the new one.
+     */
+    closePeer();
+
+
+    const myGeneration =
+      peerGeneration;
+
+
+    console.log(
+      "Creating phone WebRTC peer, generation:",
+      myGeneration
+    );
+
+
+    status.textContent =
+      "Getting connection credentials...";
+
+
+    // ----------------------------------------------------------
+    // GET CLOUDFLARE TURN CREDENTIALS
+    // ----------------------------------------------------------
+
+    let turnResponse;
+
+
+    try {
+
+      turnResponse =
+        await fetch(
+          `https://${SIGNALING_HOST}/turn-credentials`,
+          {
+            method: "GET",
+            cache: "no-store"
+          }
+        );
+
+    } catch (error) {
+
+      console.error(
+        "TURN credential network error:",
+        error
+      );
+
+      throw new Error(
+        "Could not reach TURN credential server"
+      );
+    }
+
+
+    /*
+     * Peer may have been replaced while TURN credentials
+     * were being fetched.
+     */
+    if (
+      myGeneration !==
+      peerGeneration
+    ) {
+
+      console.warn(
+        "Ignoring stale TURN credential response."
+      );
+
+      return null;
+    }
+
+
+    if (!turnResponse.ok) {
+
+      throw new Error(
+        `TURN credentials failed: ${turnResponse.status}`
+      );
+    }
+
+
+    const turnData =
+      await turnResponse.json();
+
+
+    if (
+      !turnData ||
+      !Array.isArray(
+        turnData.iceServers
+      ) ||
+      turnData.iceServers.length === 0
+    ) {
+
+      throw new Error(
+        "TURN server returned no iceServers"
+      );
+    }
+
+
+    console.log(
+      "TURN credentials received:",
+      {
+        iceServerCount:
+          turnData.iceServers.length
+      }
+    );
+
+
+    // ----------------------------------------------------------
+    // CREATE RTCPeerConnection
+    // ----------------------------------------------------------
+
+    const pc =
+      new RTCPeerConnection({
+        iceServers:
+          turnData.iceServers
+      });
+
+
+    /*
+     * Make sure this peer is still current.
+     */
+    if (
+      myGeneration !==
+      peerGeneration
+    ) {
+
+      try {
+        pc.close();
+      } catch (e) {}
+
+      return null;
+    }
+
+
+    peer = pc;
+
+
+    // ==========================================================
+    // ICE CANDIDATE
+    // ==========================================================
+
+    pc.onicecandidate =
+      (event) => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+        /*
+         * Non-trickle ICE:
+         * candidates are gathered into the local SDP.
+         * The complete answer is sent after gathering finishes.
+         */
+      };
+
+
+    // ==========================================================
+    // ICE CONNECTION STATE
+    // ==========================================================
+
+    pc.oniceconnectionstatechange =
+      () => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        console.log(
+          "Phone ICE state:",
+          pc.iceConnectionState
+        );
+      };
+
+
+    // ==========================================================
+    // ICE GATHERING STATE
+    // ==========================================================
+
+    pc.onicegatheringstatechange =
+      () => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        console.log(
+          "Phone ICE gathering:",
+          pc.iceGatheringState
+        );
+      };
+
+
+    // ==========================================================
+    // ICE CANDIDATE ERROR
+    // ==========================================================
+
+    pc.onicecandidateerror =
+      (event) => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        console.error(
+          "Phone ICE candidate ERROR:",
+          {
+            errorCode:
+              event.errorCode,
+
+            url:
+              event.url,
+
+            errorText:
+              event.errorText
+          }
+        );
+      };
+
+
+    // ==========================================================
+    // WEBRTC CONNECTION STATE
+    // ==========================================================
+
+    pc.onconnectionstatechange =
+      () => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        console.log(
+          "Phone WebRTC state:",
+          pc.connectionState
+        );
+
+
+        if (
+          pc.connectionState ===
+          "connected"
+        ) {
+
+          connLbl.textContent =
+            "Connected";
+
+          connLbl.style.color =
+            "#22c55e";
+
+
+          status.textContent =
+            phoneArmed
+              ? "TAP NOW!"
+              : "Waiting for next question...";
+        }
+
+
+        else if (
+          [
+            "failed",
+            "disconnected",
+            "closed"
+          ].includes(
+            pc.connectionState
+          )
+        ) {
+
+          connLbl.textContent =
+            "Disconnected";
+
+          connLbl.style.color =
+            "#ef4444";
+
+
+          if (!phoneArmed) {
+
+            status.textContent =
+              "Reconnecting...";
+          }
+        }
+      };
+
+
+    // ==========================================================
+    // INCOMING DATA CHANNEL
+    // ==========================================================
+
+    pc.ondatachannel =
+      (event) => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+
+          try {
+            event.channel.close();
+          } catch (e) {}
+
+          return;
+        }
+
+
+        /*
+         * Close an unexpected duplicate channel.
+         */
+        if (
+          channel &&
+          channel !== event.channel
+        ) {
+
+          try {
+            channel.close();
+          } catch (e) {}
+        }
+
+
+        channel =
+          event.channel;
+
+
+        console.log(
+          "Phone DataChannel received:",
+          channel.label
+        );
+
+
+        // ------------------------------------------------------
+        // CHANNEL OPEN
+        // ------------------------------------------------------
+
+        channel.onopen =
+          () => {
+
+            if (
+              myGeneration !==
+              peerGeneration
+            ) {
+              return;
+            }
+
+
+            console.log(
+              "Phone DataChannel OPEN"
+            );
+
+
+            connLbl.textContent =
+              "Connected";
+
+            connLbl.style.color =
+              "#22c55e";
+
+
+            status.textContent =
+              phoneArmed
+                ? "TAP NOW!"
+                : "Waiting for next question...";
+          };
+
+
+        // ------------------------------------------------------
+        // CHANNEL MESSAGE
+        // ------------------------------------------------------
+
+        channel.onmessage =
+          (event) => {
+
+            if (
+              myGeneration !==
+              peerGeneration
+            ) {
+              return;
+            }
+
+
+            handleGameMessage(
+              event.data
+            );
+          };
+
+
+        // ------------------------------------------------------
+        // CHANNEL CLOSE
+        // ------------------------------------------------------
+
+        channel.onclose =
+          () => {
+
+            if (
+              myGeneration !==
+              peerGeneration
+            ) {
+              return;
+            }
+
+
+            console.log(
+              "Phone DataChannel CLOSED"
+            );
+
+
+            if (
+              channel ===
+              event.channel
+            ) {
+
+              channel = null;
+            }
+
+
+            connLbl.textContent =
+              "Disconnected";
+
+            connLbl.style.color =
+              "#ef4444";
+
+
+            if (!phoneArmed) {
+
+              status.textContent =
+                "Reconnecting...";
+            }
+          };
+
+
+        // ------------------------------------------------------
+        // CHANNEL ERROR
+        // ------------------------------------------------------
+
+        channel.onerror =
+          (error) => {
+
+            if (
+              myGeneration !==
+              peerGeneration
+            ) {
+              return;
+            }
+
+
+            console.error(
+              "Phone DataChannel error:",
+              error
+            );
+          };
+      };
+
+
+    console.log(
+      "Phone WebRTC peer created:",
+      myGeneration
+    );
+
+
+    return pc;
+  }
+
+
+  // ============================================================
+  // ENSURE PHONE PEER
+  // ============================================================
+
+  /*
+   * This is the main race-condition fix.
+   *
+   * If several signaling messages arrive while the peer is
+   * being created, they all wait for the SAME promise.
+   */
+
+  async function ensurePhonePeer() {
+
+    if (peer) {
+      return peer;
+    }
+
+
+    if (peerCreationPromise) {
+
+      await peerCreationPromise;
+
+      return peer;
+    }
+
+
+    peerCreationPromise =
+      createPhonePeer();
+
+
+    try {
+
+      await peerCreationPromise;
+
+      return peer;
+
+    } finally {
+
+      peerCreationPromise = null;
+    }
+  }
+
+
+  // ============================================================
+  // FLUSH QUEUED ICE CANDIDATES
+  // ============================================================
+
+  async function flushCandidateQueue() {
+
+    if (
+      !peer ||
+      !remoteDescriptionSet
+    ) {
+      return;
+    }
+
+
+    const pc =
+      peer;
+
+    const queued =
+      candidateQueue.slice();
+
+
+    candidateQueue = [];
+
+
+    for (
+      const candidate of queued
+    ) {
+
+      /*
+       * Do not add candidates to a replacement peer.
+       */
+      if (
+        pc !== peer
+      ) {
+
+        console.warn(
+          "Peer changed while flushing ICE candidates."
+        );
+
+        return;
+      }
+
+
+      try {
+
+        await pc.addIceCandidate(
+          candidate
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "Queued ICE candidate failed:",
+          error
+        );
       }
     }
-  });
-  window.addEventListener("pageshow", connect);
-  window.addEventListener("online", connect);
+  }
 
-  // 4. Instant Touch Tap Handler
-  btn.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (!btn.disabled && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "BUZZ", team }));
+
+  // ============================================================
+  // HANDLE SIGNALING MESSAGE
+  // ============================================================
+
+  async function handleSignalMessage(msg) {
+
+    if (
+      msg.type !== "SIGNAL" ||
+      !msg.data
+    ) {
+      return;
     }
-  });
 
-  // Initial connection
-  connect();
+
+    const data =
+      msg.data;
+
+
+    /*
+     * CRITICAL FIX:
+     *
+     * The old code did:
+     *
+     *     if (!peer) createPhonePeer();
+     *
+     * and then immediately tried to use peer.
+     *
+     * createPhonePeer() is async because it fetches TURN
+     * credentials.
+     *
+     * We now WAIT until the peer actually exists.
+     */
+
+    const pc =
+      await ensurePhonePeer();
+
+
+    if (!pc) {
+
+      console.warn(
+        "No active peer available for signaling message."
+      );
+
+      return;
+    }
+
+
+    // ==========================================================
+    // OFFER
+    // ==========================================================
+
+    if (
+      data.type === "offer" &&
+      data.offer
+    ) {
+
+      try {
+
+        /*
+         * Ignore an offer for an old peer.
+         */
+        if (
+          pc !== peer
+        ) {
+
+          console.warn(
+            "Ignoring offer for stale peer."
+          );
+
+          return;
+        }
+
+
+        console.log(
+          "Phone received WebRTC OFFER"
+        );
+
+
+        await pc.setRemoteDescription(
+          data.offer
+        );
+
+
+        if (
+          pc !== peer
+        ) {
+
+          console.warn(
+            "Peer changed while setting remote description."
+          );
+
+          return;
+        }
+
+
+        remoteDescriptionSet = true;
+
+
+        await flushCandidateQueue();
+
+
+        if (
+          pc !== peer
+        ) {
+
+          console.warn(
+            "Peer changed before creating answer."
+          );
+
+          return;
+        }
+
+
+        const answer =
+          await pc.createAnswer();
+
+
+        if (
+          pc !== peer
+        ) {
+
+          console.warn(
+            "Peer changed before setting local description."
+          );
+
+          return;
+        }
+
+
+        await pc.setLocalDescription(
+          answer
+        );
+
+
+        /*
+         * Non-trickle ICE:
+         * wait for all local candidates to be gathered into the SDP.
+         */
+
+        await waitForIceGatheringComplete(pc);
+
+
+        if (
+          pc !== peer
+        ) {
+
+          console.warn(
+            "Peer changed before sending answer."
+          );
+
+          return;
+        }
+
+
+        sendSignal({
+          type: "answer",
+          answer:
+            pc.localDescription
+        });
+
+
+        console.log(
+          "Phone sent complete WebRTC ANSWER"
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          "WebRTC offer/answer error:",
+          error
+        );
+      }
+
+
+      return;
+    }
+
+
+    // ==========================================================
+    // REMOTE ICE CANDIDATE
+    // ==========================================================
+
+    if (
+      data.type === "candidate" &&
+      data.candidate
+    ) {
+
+      /*
+       * If remote description isn't ready yet,
+       * hold the candidate.
+       */
+
+      if (
+        !remoteDescriptionSet
+      ) {
+
+        candidateQueue.push(
+          data.candidate
+        );
+
+
+        console.log(
+          "Queued remote ICE candidate. Queue size:",
+          candidateQueue.length
+        );
+
+
+        return;
+      }
+
+
+      /*
+       * Do not feed candidates into an old peer.
+       */
+
+      if (
+        pc !== peer
+      ) {
+
+        console.warn(
+          "Ignoring ICE candidate for stale peer."
+        );
+
+        return;
+      }
+
+
+      try {
+
+        await pc.addIceCandidate(
+          data.candidate
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "ICE candidate failed:",
+          error
+        );
+      }
+    }
+  }
+
+
+  // ============================================================
+  // GAME DATA CHANNEL
+  // ============================================================
+
+  function handleGameMessage(raw) {
+
+    let msg;
+
+
+    try {
+
+      msg =
+        JSON.parse(raw);
+
+    } catch (e) {
+
+      console.warn(
+        "Invalid game message:",
+        raw
+      );
+
+      return;
+    }
+
+
+    // ----------------------------------------------------------
+    // GAME OVER
+    // ----------------------------------------------------------
+
+    if (msg.type === "GAME_OVER") {
+      setGameOver();
+      return;
+    }
+
+
+    // ----------------------------------------------------------
+    // ARM
+    // ----------------------------------------------------------
+
+    if (
+      msg.type === "ARM"
+    ) {
+
+      setArmed();
+
+      return;
+    }
+
+
+    // ----------------------------------------------------------
+    // LOCK
+    // ----------------------------------------------------------
+
+    if (
+      msg.type === "LOCK"
+    ) {
+
+      setLocked(
+        msg.winnerTeam
+      );
+
+      return;
+    }
+
+
+    // ----------------------------------------------------------
+    // RESET
+    // ----------------------------------------------------------
+
+    if (
+      msg.type === "RESET"
+    ) {
+
+      setStandby(
+        "Waiting for next question..."
+      );
+
+      return;
+    }
+  }
+
+
+  // ============================================================
+  // BUZZ
+  // ============================================================
+
+  function buzz() {
+
+    if (teamRejected || gameOver) {
+      return;
+    }
+
+
+    if (
+      !phoneArmed ||
+      phoneBuzzed
+    ) {
+      return;
+    }
+
+
+    if (
+      !channel ||
+      channel.readyState !==
+        "open"
+    ) {
+
+      console.warn(
+        "BUZZ ignored: DataChannel not open."
+      );
+
+      return;
+    }
+
+
+    phoneBuzzed = true;
+
+    phoneArmed = false;
+
+    btn.disabled = true;
+
+    if (woodBoard) {
+      woodBoard.classList.add("buzzed");
+    }
+
+    navigator.vibrate?.([80]);
+
+    // playBuzzerSound(); // Sound played on host screen
+
+
+    try {
+
+      channel.send(
+        JSON.stringify({
+          type: "BUZZ",
+          team,
+          timestamp: Date.now()
+        })
+      );
+
+
+      console.log(
+        "BUZZ sent for Team",
+        team + 1
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Failed to send BUZZ:",
+        error
+      );
+
+
+      /*
+       * If send failed, don't leave the buzzer falsely
+       * showing that the buzz was delivered.
+       */
+
+      phoneBuzzed = false;
+
+      phoneArmed = true;
+
+      btn.disabled = false;
+
+      if (woodBoard) {
+        woodBoard.classList.remove("buzzed");
+      }
+    }
+  }
+
+
+  // ============================================================
+  // BUZZ BUTTON
+  // ============================================================
+
+  btn.addEventListener(
+    "pointerdown",
+    (event) => {
+
+      event.preventDefault();
+
+      buzz();
+    }
+  );
+
+
+  // ============================================================
+  // CONNECT SIGNALING
+  // ============================================================
+
+  function connectSignaling() {
+
+    if (teamRejected || gameOver) {
+      return;
+    }
+
+
+    if (
+      signalingWs &&
+      (
+        signalingWs.readyState ===
+          WebSocket.OPEN ||
+        signalingWs.readyState ===
+          WebSocket.CONNECTING
+      )
+    ) {
+
+      return;
+    }
+
+
+    clearTimeout(
+      reconnectTimer
+    );
+
+
+    connLbl.textContent =
+      "Connecting...";
+
+    connLbl.style.color =
+      "";
+
+
+    /*
+     * Create a local WebSocket variable so old sockets
+     * cannot interfere with a newer connection.
+     */
+
+    const ws =
+      new WebSocket(
+        "wss://" +
+        SIGNALING_HOST +
+        "/?room=" +
+        encodeURIComponent(room)
+      );
+
+
+    signalingWs = ws;
+
+
+    // ==========================================================
+    // SIGNALING OPEN
+    // ==========================================================
+
+    ws.onopen =
+      () => {
+
+        /*
+         * Ignore an old WebSocket that has been replaced.
+         */
+
+        if (
+          ws !== signalingWs
+        ) {
+
+          try {
+            ws.close();
+          } catch (e) {}
+
+          return;
+        }
+
+
+        if (teamRejected || gameOver) {
+
+          try {
+            ws.close();
+          } catch (e) {}
+
+          return;
+        }
+
+
+        retryDelay = 1000;
+
+
+        connLbl.textContent =
+          "Connecting...";
+
+        connLbl.style.color =
+          "#facc15";
+
+
+        status.textContent =
+          "Connecting buzzer...";
+
+
+        ws.send(
+          JSON.stringify({
+            type: "REGISTER_PHONE",
+            team,
+            name
+          })
+        );
+
+
+        /*
+         * IMPORTANT:
+         *
+         * We intentionally do NOT call createPhonePeer()
+         * here.
+         *
+         * The peer is created safely when the host's OFFER
+         * arrives.
+         */
+      };
+
+
+    // ==========================================================
+    // SIGNALING MESSAGE
+    // ==========================================================
+
+    ws.onmessage =
+      async (event) => {
+
+        /*
+         * Ignore messages from an old WebSocket.
+         */
+
+        if (
+          ws !== signalingWs
+        ) {
+
+          return;
+        }
+
+
+        try {
+
+          const msg =
+            JSON.parse(
+              event.data
+            );
+
+
+          // ----------------------------------------------------
+          // TEAM OCCUPIED
+          // ----------------------------------------------------
+
+          if (
+            msg.type ===
+            "TEAM_OCCUPIED"
+          ) {
+
+            teamRejected = true;
+
+
+            clearTimeout(
+              reconnectTimer
+            );
+
+
+            closePeer();
+
+
+            setStandby(
+              "Team " +
+              (team + 1) +
+              " is already connected."
+            );
+
+
+            connLbl.textContent =
+              "Team Occupied";
+
+            connLbl.style.color =
+              "#ef4444";
+
+
+            try {
+              ws.close();
+            } catch (e) {}
+
+
+            return;
+          }
+
+
+          // ----------------------------------------------------
+          // NORMAL SIGNAL
+          // ----------------------------------------------------
+
+          await handleSignalMessage(
+            msg
+          );
+
+
+        } catch (error) {
+
+          console.error(
+            "Signaling message error:",
+            error
+          );
+        }
+      };
+
+
+    // ==========================================================
+    // SIGNALING ERROR
+    // ==========================================================
+
+    ws.onerror =
+      (error) => {
+
+        if (
+          ws !== signalingWs
+        ) {
+          return;
+        }
+
+
+        console.error(
+          "Signaling error:",
+          error
+        );
+
+
+        connLbl.textContent =
+          "Disconnected";
+
+        connLbl.style.color =
+          "#ef4444";
+      };
+
+
+    // ==========================================================
+    // SIGNALING CLOSE
+    // ==========================================================
+
+    ws.onclose =
+      () => {
+
+        /*
+         * Ignore old WebSockets.
+         */
+
+        if (
+          ws !== signalingWs
+        ) {
+          return;
+        }
+
+
+        signalingWs = null;
+
+
+        /*
+         * Close the current WebRTC peer.
+         */
+
+        closePeer();
+
+
+        if (teamRejected || gameOver) {
+
+          connLbl.textContent =
+            "Team Occupied";
+
+          connLbl.style.color =
+            "#ef4444";
+
+          return;
+        }
+
+
+        connLbl.textContent =
+          "Disconnected";
+
+        connLbl.style.color =
+          "#ef4444";
+
+
+        if (!phoneArmed) {
+
+          status.textContent =
+            "Reconnecting in " +
+            (
+              retryDelay / 1000
+            ).toFixed(0) +
+            "s...";
+        }
+
+
+        clearTimeout(
+          reconnectTimer
+        );
+
+
+        reconnectTimer =
+          setTimeout(
+            connectSignaling,
+            retryDelay
+          );
+
+
+        retryDelay =
+          Math.min(
+            retryDelay * 2,
+            MAX_RETRY_DELAY
+          );
+      };
+  }
+
+
+  // ============================================================
+  // PAGE VISIBILITY
+  // ============================================================
+
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+
+        if (!teamRejected && !gameOver) {
+
+          connectSignaling();
+        }
+
+
+        if (
+          "wakeLock" in navigator
+        ) {
+
+          navigator.wakeLock
+            .request("screen")
+            .catch(() => {});
+        }
+      }
+    }
+  );
+
+
+  // ============================================================
+  // PAGE SHOW
+  // ============================================================
+
+  window.addEventListener(
+    "pageshow",
+    () => {
+
+      if (!teamRejected && !gameOver) {
+
+        connectSignaling();
+      }
+    }
+  );
+
+
+  // ============================================================
+  // NETWORK ONLINE
+  // ============================================================
+
+  window.addEventListener(
+    "online",
+    () => {
+
+      if (!teamRejected && !gameOver) {
+
+        connectSignaling();
+      }
+    }
+  );
+
+
+  // ============================================================
+  // WAKE LOCK
+  // ============================================================
+
+  if (
+    "wakeLock" in navigator
+  ) {
+
+    navigator.wakeLock
+      .request("screen")
+      .catch(() => {});
+  }
+
+
+  // ============================================================
+  // START
+  // ============================================================
+
+  setStandby();
+
+  connectSignaling();
+
 </script>
+
 </body>
 </html>
