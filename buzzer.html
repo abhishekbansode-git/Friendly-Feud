@@ -651,10 +651,10 @@
 
     } catch (error) {
 
-      console.error(
-        "Failed to send signaling message:",
-        error
-      );
+      
+
+
+
 
       return false;
     }
@@ -769,10 +769,10 @@
       peerGeneration;
 
 
-    console.log(
-      "Creating phone WebRTC peer, generation:",
-      myGeneration
-    );
+    
+
+
+
 
 
     status.textContent =
@@ -799,10 +799,10 @@
 
     } catch (error) {
 
-      console.error(
-        "TURN credential network error:",
-        error
-      );
+      
+
+
+
 
       throw new Error(
         "Could not reach TURN credential server"
@@ -819,9 +819,9 @@
       peerGeneration
     ) {
 
-      console.warn(
-        "Ignoring stale TURN credential response."
-      );
+      
+
+
 
       return null;
     }
@@ -853,13 +853,13 @@
     }
 
 
-    console.log(
-      "TURN credentials received:",
-      {
-        iceServerCount:
-          turnData.iceServers.length
-      }
-    );
+    
+
+
+
+
+
+
 
 
     // ----------------------------------------------------------
@@ -929,10 +929,10 @@
         }
 
 
-        console.log(
-          "Phone ICE state:",
-          pc.iceConnectionState
-        );
+        
+
+
+
       };
 
 
@@ -951,10 +951,10 @@
         }
 
 
-        console.log(
-          "Phone ICE gathering:",
-          pc.iceGatheringState
-        );
+        
+
+
+
       };
 
 
@@ -973,19 +973,19 @@
         }
 
 
-        console.error(
-          "Phone ICE candidate ERROR:",
-          {
-            errorCode:
-              event.errorCode,
+        
 
-            url:
-              event.url,
 
-            errorText:
-              event.errorText
-          }
-        );
+
+
+
+
+
+
+
+
+
+
       };
 
 
@@ -1004,10 +1004,10 @@
         }
 
 
-        console.log(
-          "Phone WebRTC state:",
-          pc.connectionState
-        );
+        
+
+
+
 
 
         if (
@@ -1093,10 +1093,10 @@
           event.channel;
 
 
-        console.log(
-          "Phone DataChannel received:",
-          channel.label
-        );
+        
+
+
+
 
 
         // ------------------------------------------------------
@@ -1114,9 +1114,9 @@
             }
 
 
-            console.log(
-              "Phone DataChannel OPEN"
-            );
+            
+
+
 
 
             connLbl.textContent =
@@ -1174,9 +1174,9 @@
             }
 
 
-            console.log(
-              "Phone DataChannel CLOSED"
-            );
+            
+
+
 
 
             if (
@@ -1218,18 +1218,18 @@
             }
 
 
-            console.error(
-              "Phone DataChannel error:",
-              error
-            );
+            
+
+
+
           };
       };
 
 
-    console.log(
-      "Phone WebRTC peer created:",
-      myGeneration
-    );
+    
+
+
+
 
 
     return pc;
@@ -1314,9 +1314,9 @@
         pc !== peer
       ) {
 
-        console.warn(
-          "Peer changed while flushing ICE candidates."
-        );
+        
+
+
 
         return;
       }
@@ -1330,10 +1330,10 @@
 
       } catch (error) {
 
-        console.warn(
-          "Queued ICE candidate failed:",
-          error
-        );
+        
+
+
+
       }
     }
   }
@@ -1378,9 +1378,9 @@
 
     if (!pc) {
 
-      console.warn(
-        "No active peer available for signaling message."
-      );
+      
+
+
 
       return;
     }
@@ -1404,17 +1404,17 @@
           pc !== peer
         ) {
 
-          console.warn(
-            "Ignoring offer for stale peer."
-          );
+          
+
+
 
           return;
         }
 
 
-        console.log(
-          "Phone received WebRTC OFFER"
-        );
+        
+
+
 
 
         await pc.setRemoteDescription(
@@ -1426,9 +1426,9 @@
           pc !== peer
         ) {
 
-          console.warn(
-            "Peer changed while setting remote description."
-          );
+          
+
+
 
           return;
         }
@@ -1444,9 +1444,9 @@
           pc !== peer
         ) {
 
-          console.warn(
-            "Peer changed before creating answer."
-          );
+          
+
+
 
           return;
         }
@@ -1460,9 +1460,9 @@
           pc !== peer
         ) {
 
-          console.warn(
-            "Peer changed before setting local description."
-          );
+          
+
+
 
           return;
         }
@@ -1485,9 +1485,9 @@
           pc !== peer
         ) {
 
-          console.warn(
-            "Peer changed before sending answer."
-          );
+          
+
+
 
           return;
         }
@@ -1500,17 +1500,17 @@
         });
 
 
-        console.log(
-          "Phone sent complete WebRTC ANSWER"
-        );
+        
+
+
 
 
       } catch (error) {
 
-        console.error(
-          "WebRTC offer/answer error:",
-          error
-        );
+        
+
+
+
       }
 
 
@@ -1541,10 +1541,10 @@
         );
 
 
-        console.log(
-          "Queued remote ICE candidate. Queue size:",
-          candidateQueue.length
-        );
+        
+
+
+
 
 
         return;
@@ -1559,9 +1559,9 @@
         pc !== peer
       ) {
 
-        console.warn(
-          "Ignoring ICE candidate for stale peer."
-        );
+        
+
+
 
         return;
       }
@@ -1575,10 +1575,10 @@
 
       } catch (error) {
 
-        console.warn(
-          "ICE candidate failed:",
-          error
-        );
+        
+
+
+
       }
     }
   }
@@ -1600,10 +1600,10 @@
 
     } catch (e) {
 
-      console.warn(
-        "Invalid game message:",
-        raw
-      );
+      
+
+
+
 
       return;
     }
@@ -1691,9 +1691,9 @@
         "open"
     ) {
 
-      console.warn(
-        "BUZZ ignored: DataChannel not open."
-      );
+      
+
+
 
       return;
     }
@@ -1725,18 +1725,18 @@
       );
 
 
-      console.log(
-        "BUZZ sent for Team",
-        team + 1
-      );
+      
+
+
+
 
 
     } catch (error) {
 
-      console.error(
-        "Failed to send BUZZ:",
-        error
-      );
+      
+
+
+
 
 
       /*
@@ -1974,10 +1974,10 @@
 
         } catch (error) {
 
-          console.error(
-            "Signaling message error:",
-            error
-          );
+          
+
+
+
         }
       };
 
@@ -1996,10 +1996,10 @@
         }
 
 
-        console.error(
-          "Signaling error:",
-          error
-        );
+        
+
+
+
 
 
         connLbl.textContent =
