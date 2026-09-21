@@ -1939,11 +1939,12 @@
             closePeer();
 
 
-            setStandby(
-              "Team " +
-              (team + 1) +
-              " is already connected."
-            );
+            const rejectionMessage =
+              msg.type === "DEVICE_OCCUPIED"
+                ? "This phone already has a buzzer connected to another team. You cannot connect this phone to both teams."
+                : "Team " + (team + 1) + " already has a connected buzzer. This phone cannot join until the existing buzzer disconnects.";
+
+            setStandby(rejectionMessage);
 
 
             connLbl.textContent =
