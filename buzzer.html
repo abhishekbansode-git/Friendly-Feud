@@ -486,6 +486,13 @@
    */
   let teamRejected = false;
 
+  const deviceId = (() => {
+    const key = "ff_device_id";
+    let id = localStorage.getItem(key);
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()); localStorage.setItem(key, id); }
+    return id;
+  })();
+
 
   // ============================================================
   // UI FUNCTIONS
@@ -1141,9 +1148,14 @@
             }
 
 
-            handleGameMessage(
-              event.data
-            );
+            try {
+              const message = JSON.parse(event.data);
+              if (message.type === "__FF_HEARTBEAT_PING") {
+                if (channel.readyState === "open") channel.send(JSON.stringify({ type: "__FF_HEARTBEAT_PONG", at: message.at }));
+                return;
+              }
+            } catch (e) {}
+            handleGameMessage(event.data);
           };
 
 
@@ -1865,7 +1877,8 @@
           JSON.stringify({
             type: "REGISTER_PHONE",
             team,
-            name
+            name,
+            deviceId
           })
         );
 
@@ -1913,10 +1926,7 @@
           // TEAM OCCUPIED
           // ----------------------------------------------------
 
-          if (
-            msg.type ===
-            "TEAM_OCCUPIED"
-          ) {
+          if (msg.type === "TEAM_OCCUPIED" || msg.type === "DEVICE_OCCUPIED") {
 
             teamRejected = true;
 
