@@ -1873,7 +1873,14 @@
         "wss://" +
         SIGNALING_HOST +
         "/?room=" +
-        encodeURIComponent(room)
+        encodeURIComponent(room) +
+        "&role=phone" +
+        "&team=" +
+        encodeURIComponent(String(team)) +
+        "&name=" +
+        encodeURIComponent(name) +
+        "&deviceId=" +
+        encodeURIComponent(deviceId)
       );
 
 
@@ -1927,14 +1934,8 @@
           "Connecting buzzer...";
 
 
-        ws.send(
-          JSON.stringify({
-            type: "REGISTER_PHONE",
-            team,
-            name,
-            deviceId
-          })
-        );
+        // Registration is now performed by the Durable Object
+        // during the WebSocket upgrade using URL parameters.
 
 
         /*
