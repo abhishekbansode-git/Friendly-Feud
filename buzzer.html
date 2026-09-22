@@ -651,11 +651,6 @@
 
     } catch (error) {
 
-      
-
-
-
-
       return false;
     }
   }
@@ -703,56 +698,6 @@
     peer = null;
   }
 
-
-  // ============================================================
-  // WAIT FOR ICE GATHERING
-  // ============================================================
-
-  function waitForIceGatheringComplete(pc, timeout = 10000) {
-
-    if (pc.iceGatheringState === "complete") {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-
-      let finished = false;
-
-      const finish = () => {
-
-        if (finished) {
-          return;
-        }
-
-        finished = true;
-
-        pc.removeEventListener(
-          "icegatheringstatechange",
-          check
-        );
-
-        clearTimeout(timer);
-
-        resolve();
-      };
-
-      const check = () => {
-
-        if (pc.iceGatheringState === "complete") {
-          finish();
-        }
-      };
-
-      const timer = setTimeout(finish, timeout);
-
-      pc.addEventListener(
-        "icegatheringstatechange",
-        check
-      );
-    });
-  }
-
-
   // ============================================================
   // CREATE PHONE WEBRTC PEER
   // ============================================================
@@ -767,12 +712,6 @@
 
     const myGeneration =
       peerGeneration;
-
-
-    
-
-
-
 
 
     status.textContent =
@@ -799,11 +738,6 @@
 
     } catch (error) {
 
-      
-
-
-
-
       throw new Error(
         "Could not reach TURN credential server"
       );
@@ -818,10 +752,6 @@
       myGeneration !==
       peerGeneration
     ) {
-
-      
-
-
 
       return null;
     }
@@ -851,15 +781,6 @@
         "TURN server returned no iceServers"
       );
     }
-
-
-    
-
-
-
-
-
-
 
 
     // ----------------------------------------------------------
@@ -906,11 +827,16 @@
           return;
         }
 
-        /*
-         * Non-trickle ICE:
-         * candidates are gathered into the local SDP.
-         * The complete answer is sent after gathering finishes.
+        /* 
+         * TRICKLE ICE ENABLED
+         * Stream candidates over WebSocket as they are discovered
          */
+        if (event.candidate) {
+          sendSignal({
+            type: "candidate",
+            candidate: event.candidate
+          });
+        }
       };
 
 
@@ -927,11 +853,6 @@
         ) {
           return;
         }
-
-
-        
-
-
 
       };
 
@@ -950,11 +871,6 @@
           return;
         }
 
-
-        
-
-
-
       };
 
 
@@ -972,20 +888,6 @@
           return;
         }
 
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
       };
 
 
@@ -1002,13 +904,6 @@
         ) {
           return;
         }
-
-
-        
-
-
-
-
 
         if (
           pc.connectionState ===
@@ -1092,13 +987,6 @@
         channel =
           event.channel;
 
-
-        
-
-
-
-
-
         // ------------------------------------------------------
         // CHANNEL OPEN
         // ------------------------------------------------------
@@ -1112,12 +1000,6 @@
             ) {
               return;
             }
-
-
-            
-
-
-
 
             connLbl.textContent =
               "Connected";
@@ -1174,11 +1056,6 @@
             }
 
 
-            
-
-
-
-
             if (
               channel ===
               event.channel
@@ -1217,20 +1094,8 @@
               return;
             }
 
-
-            
-
-
-
           };
       };
-
-
-    
-
-
-
-
 
     return pc;
   }
@@ -1314,10 +1179,6 @@
         pc !== peer
       ) {
 
-        
-
-
-
         return;
       }
 
@@ -1329,10 +1190,6 @@
         );
 
       } catch (error) {
-
-        
-
-
 
       }
     }
@@ -1377,11 +1234,6 @@
 
 
     if (!pc) {
-
-      
-
-
-
       return;
     }
 
@@ -1403,19 +1255,8 @@
         if (
           pc !== peer
         ) {
-
-          
-
-
-
           return;
         }
-
-
-        
-
-
-
 
         await pc.setRemoteDescription(
           data.offer
@@ -1425,11 +1266,6 @@
         if (
           pc !== peer
         ) {
-
-          
-
-
-
           return;
         }
 
@@ -1443,11 +1279,6 @@
         if (
           pc !== peer
         ) {
-
-          
-
-
-
           return;
         }
 
@@ -1459,11 +1290,6 @@
         if (
           pc !== peer
         ) {
-
-          
-
-
-
           return;
         }
 
@@ -1472,26 +1298,13 @@
           answer
         );
 
-
-        /*
-         * Non-trickle ICE:
-         * wait for all local candidates to be gathered into the SDP.
+        /* 
+         * TRICKLE ICE ENABLED
+         * No longer waiting for gathering to complete. Send base SDP answer instantly.
          */
-
-        await waitForIceGatheringComplete(pc);
-
-
-        if (
-          pc !== peer
-        ) {
-
-          
-
-
-
+        if (pc !== peer) {
           return;
         }
-
 
         sendSignal({
           type: "answer",
@@ -1499,20 +1312,9 @@
             pc.localDescription
         });
 
-
-        
-
-
-
-
       } catch (error) {
 
-        
-
-
-
       }
-
 
       return;
     }
@@ -1540,13 +1342,6 @@
           data.candidate
         );
 
-
-        
-
-
-
-
-
         return;
       }
 
@@ -1559,10 +1354,6 @@
         pc !== peer
       ) {
 
-        
-
-
-
         return;
       }
 
@@ -1574,10 +1365,6 @@
         );
 
       } catch (error) {
-
-        
-
-
 
       }
     }
@@ -1599,12 +1386,6 @@
         JSON.parse(raw);
 
     } catch (e) {
-
-      
-
-
-
-
       return;
     }
 
@@ -1691,10 +1472,6 @@
         "open"
     ) {
 
-      
-
-
-
       return;
     }
 
@@ -1725,19 +1502,7 @@
       );
 
 
-      
-
-
-
-
-
     } catch (error) {
-
-      
-
-
-
-
 
       /*
        * If send failed, don't leave the buzzer falsely
@@ -1974,10 +1739,6 @@
 
         } catch (error) {
 
-          
-
-
-
         }
       };
 
@@ -1994,13 +1755,6 @@
         ) {
           return;
         }
-
-
-        
-
-
-
-
 
         connLbl.textContent =
           "Disconnected";
