@@ -464,6 +464,11 @@
 
   let reconnectTimer = null;
 
+  // WebRTC-only recovery timer. The signaling WebSocket stays open.
+  let peerRecoveryTimer = null;
+  let peerRecoveryInProgress = false;
+  let peerRecoveryDelay = 1500;
+
   let retryDelay = 1000;
 
   const MAX_RETRY_DELAY = 15000;
@@ -509,6 +514,7 @@
     if (woodBoard) woodBoard.classList.remove("buzzed");
     if (gameOverScreen) gameOverScreen.classList.add("active");
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (peerRecoveryTimer) { clearTimeout(peerRecoveryTimer); peerRecoveryTimer = null; }
     if (signalingWs) { try { signalingWs.close(); } catch (error) {} }
   }
 
@@ -658,6 +664,47 @@
 
       return false;
     }
+  }
+
+
+  // ============================================================
+  // WEBRTC-ONLY RECOVERY
+  // ============================================================
+
+  function requestPeerRecovery() {
+    if (teamRejected || gameOver || peerRecoveryInProgress) return;
+    if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) return;
+
+    peerRecoveryInProgress = true;
+    clearTimeout(peerRecoveryTimer);
+    closePeer();
+    setStandby("Connection lost. Reconnecting buzzer...");
+
+    peerRecoveryTimer = setTimeout(() => {
+      peerRecoveryTimer = null;
+      if (teamRejected || gameOver) return;
+      if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) {
+        peerRecoveryInProgress = false;
+        return;
+      }
+
+      // Re-register on the existing signaling socket. The server treats
+      // the same device/team on the same socket as a reconnect and sends
+      // a fresh PHONE_JOINED event to the host.
+      try {
+        signalingWs.send(JSON.stringify({
+          type: "REGISTER_PHONE",
+          team,
+          name,
+          deviceId
+        }));
+      } catch (error) {
+        peerRecoveryInProgress = false;
+        return;
+      }
+
+      peerRecoveryInProgress = false;
+    }, peerRecoveryDelay);
   }
 
 
@@ -1022,6 +1069,11 @@
             "#22c55e";
 
 
+          peerRecoveryInProgress = false;
+          clearTimeout(peerRecoveryTimer);
+          peerRecoveryTimer = null;
+          peerRecoveryDelay = 1500;
+
           status.textContent =
             phoneArmed
               ? "TAP NOW!"
@@ -1040,10 +1092,12 @@
         ) {
 
           connLbl.textContent =
-            "Disconnected";
+            "Reconnecting...";
 
           connLbl.style.color =
-            "#ef4444";
+            "#facc15";
+
+          requestPeerRecovery();
 
 
           if (!phoneArmed) {
