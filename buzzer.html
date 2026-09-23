@@ -379,6 +379,11 @@
     color
   );
 
+  const roomLbl = document.getElementById("room-lbl");
+  if (roomLbl) {
+    roomLbl.textContent = room;
+  }
+
   document.getElementById(
     "team-title"
   ).textContent =
@@ -411,6 +416,13 @@
     );
 
   const gameOverScreen = document.getElementById("game-over-screen");
+
+
+  // ============================================================
+  // BUZZER AUDIO: Sound is played on the host screen (FF_CE1_v2.html)
+  // ============================================================
+  function playBuzzerSound() {}
+  window.playBuzzerSound = playBuzzerSound;
 
 
 
@@ -946,6 +958,81 @@
          * candidates are gathered into the local SDP.
          * The complete answer is sent after gathering finishes.
          */
+      };
+
+
+    // ==========================================================
+    // ICE CONNECTION STATE
+    // ==========================================================
+
+    pc.oniceconnectionstatechange =
+      () => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        
+
+
+
+      };
+
+
+    // ==========================================================
+    // ICE GATHERING STATE
+    // ==========================================================
+
+    pc.onicegatheringstatechange =
+      () => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        
+
+
+
+      };
+
+
+    // ==========================================================
+    // ICE CANDIDATE ERROR
+    // ==========================================================
+
+    pc.onicecandidateerror =
+      (event) => {
+
+        if (
+          myGeneration !==
+          peerGeneration
+        ) {
+          return;
+        }
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
       };
 
 
@@ -1678,6 +1765,7 @@
 
     navigator.vibrate?.([80]);
 
+    // playBuzzerSound(); // Sound played on host screen
 
 
     try {
