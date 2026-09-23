@@ -418,11 +418,7 @@
   const gameOverScreen = document.getElementById("game-over-screen");
 
 
-  // ============================================================
-  // BUZZER AUDIO: Sound is played on the host screen (FF_CE1_v2.html)
-  // ============================================================
-  function playBuzzerSound() {}
-  window.playBuzzerSound = playBuzzerSound;
+
 
 
 
@@ -441,11 +437,7 @@
   let remoteDescriptionSet = false;
 
 
-  /*
-   * IMPORTANT FIX
-   *
-   * Only one peer creation operation may happen at a time.
-   */
+  // Only one peer creation may run at a time (prevents race conditions).
   let peerCreationPromise = null;
 
 
@@ -1411,21 +1403,7 @@
       msg.data;
 
 
-    /*
-     * CRITICAL FIX:
-     *
-     * The old code did:
-     *
-     *     if (!peer) createPhonePeer();
-     *
-     * and then immediately tried to use peer.
-     *
-     * createPhonePeer() is async because it fetches TURN
-     * credentials.
-     *
-     * We now WAIT until the peer actually exists.
-     */
-
+    // Wait for peer to be fully created (createPhonePeer is async).
     const pc =
       await ensurePhonePeer();
 
@@ -1765,7 +1743,6 @@
 
     navigator.vibrate?.([80]);
 
-    // playBuzzerSound(); // Sound played on host screen
 
 
     try {
