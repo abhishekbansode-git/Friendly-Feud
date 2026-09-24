@@ -1244,6 +1244,27 @@
             return;
           }
           // ----------------------------------------------------
+          // HOST GONE (host tab was closed mid-game)
+          // ----------------------------------------------------
+          if (msg.type === "HOST_GONE") {
+            gameOver = true;
+            phoneArmed = false;
+            phoneBuzzed = false;
+            clearTimeout(reconnectTimer);
+            clearTimeout(peerRecoveryTimer);
+            reconnectTimer = null;
+            peerRecoveryTimer = null;
+            closePeer();
+            btn.disabled = true;
+            btn.className = "";
+            btn.textContent = "GAME OVER";
+            status.textContent = "Host disconnected";
+            connLbl.textContent = "Disconnected";
+            connLbl.style.color = "#ef4444";
+            try { ws.close(); } catch (e) {}
+            return;
+          }
+          // ----------------------------------------------------
           // NORMAL SIGNAL
           // ----------------------------------------------------
           await handleSignalMessage(
