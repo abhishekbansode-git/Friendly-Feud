@@ -373,6 +373,7 @@
   // SIGNALING RECONNECT STATE
   // ============================================================
   let reconnectTimer = null;
+  let signalingKeepAliveTimer = null;
   // WebRTC-only recovery timer. The signaling WebSocket stays open.
   let peerRecoveryTimer = null;
   let peerRecoveryInProgress = false;
@@ -411,6 +412,7 @@
     if (gameOverScreen) gameOverScreen.classList.add("active");
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (peerRecoveryTimer) { clearTimeout(peerRecoveryTimer); peerRecoveryTimer = null; }
+    if (signalingKeepAliveTimer) { clearInterval(signalingKeepAliveTimer); signalingKeepAliveTimer = null; }
     if (signalingWs) { try { signalingWs.close(); } catch (error) {} }
   }
   function setStandby(
@@ -1166,6 +1168,12 @@
     // ==========================================================
     ws.onopen =
       () => {
+        if (signalingKeepAliveTimer) clearInterval(signalingKeepAliveTimer);
+        signalingKeepAliveTimer = setInterval(() => {
+          if (signalingWs && signalingWs.readyState === WebSocket.OPEN) {
+            try { signalingWs.send(JSON.stringify({ type: "PING" })); } catch (e) {}
+          }
+        }, 45000);
         /*
          * Ignore an old WebSocket that has been replaced.
          */
@@ -1293,6 +1301,10 @@
     // ==========================================================
     ws.onclose =
       () => {
+        if (signalingKeepAliveTimer) {
+          clearInterval(signalingKeepAliveTimer);
+          signalingKeepAliveTimer = null;
+        }
         /*
          * Ignore old WebSockets.
          */
