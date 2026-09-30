@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Friendly Feud Phone</title>
@@ -275,15 +275,17 @@
   </div>
   <script>
     // ============================================================
-    // ABLY REALTIME CONFIGURATION
+    // MQTT BROKER CONFIGURATION
     // ============================================================
-    const ABLY_KEY = "2si6sA.z6skSQ:20dS9MQwEoR2E70VHWSnePpXyMQuZgKlCRwFdnuyDms";
+    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+    const MQTT_FALLBACK_BROKER = "wss://broker.emqx.io:8084/mqtt";
 
     // ============================================================
     // URL / LOCAL STORAGE
     // ============================================================
     const params = new URLSearchParams(window.location.search);
     let room = params.get("room");
+    let secret = params.get("secret") || room;
     let team = params.get("team");
     let name = params.get("name");
     let color = params.get("color");
@@ -291,11 +293,13 @@
     if (room) {
       room = room.toUpperCase();
       localStorage.setItem("feud_room", room);
+      if (secret) localStorage.setItem("feud_secret", secret);
       if (team !== null) localStorage.setItem("feud_team", team);
       if (name) localStorage.setItem("feud_name", name);
       if (color) localStorage.setItem("feud_color", color);
     } else {
       room = (localStorage.getItem("feud_room") || "").toUpperCase();
+      secret = localStorage.getItem("feud_secret") || room;
       team = localStorage.getItem("feud_team") || "0";
       name = localStorage.getItem("feud_name") || ("Team " + (parseInt(team, 10) + 1));
       color = localStorage.getItem("feud_color") || "#3b82f6";
@@ -328,6 +332,7 @@
     // ============================================================
     // GAME STATE & DEVICE ID
     // ============================================================
+    let isLobbyTest = false;
     let phoneArmed = false;
     let phoneBuzzed = false;
     let gameOver = false;
@@ -348,9 +353,9 @@
     // ============================================================
     function setGameOver() {
       gameOver = true;
+      isLobbyTest = false;
       phoneArmed = false;
       phoneBuzzed = false;
-      btn.disabled = true;
       btn.className = "";
       btn.textContent = "GAME OVER";
       status.textContent = "Game finished";
@@ -360,16 +365,27 @@
         gameOverScreen.onclick = () => {
           gameOver = false;
           gameOverScreen.classList.remove("active");
-          connectAbly();
+          connectMqtt();
         };
       }
     }
 
+    function setLobbyTestMode() {
+      if (gameOver) return;
+      isLobbyTest = true;
+      phoneArmed = true;
+      phoneBuzzed = false;
+      btn.className = "armed";
+      btn.textContent = "TEST BUZZ!";
+      status.textContent = "Connected! Tap button to test buzzer.";
+      if (woodBoard) woodBoard.classList.remove("buzzed");
+    }
+
     function setStandby(text = "Waiting for host...") {
       if (gameOver) return;
+      isLobbyTest = false;
       phoneArmed = false;
       phoneBuzzed = false;
-      btn.disabled = true;
       btn.className = "";
       btn.textContent = "STANDBY";
       status.textContent = text;
@@ -378,9 +394,9 @@
 
     function setArmed() {
       if (teamRejected || gameOver) return;
+      isLobbyTest = false;
       phoneArmed = true;
       phoneBuzzed = false;
-      btn.disabled = false;
       btn.className = "armed";
       btn.textContent = "BUZZ!";
       status.textContent = "TAP NOW!";
@@ -389,8 +405,8 @@
     }
 
     function setLocked(winnerTeam) {
+      isLobbyTest = false;
       phoneArmed = false;
-      btn.disabled = true;
       btn.classList.remove("armed", "countdown");
       if (Number(winnerTeam) === team) {
         btn.classList.add("winner");
@@ -407,12 +423,13 @@
     }
 
     // ============================================================
-    // ABLY REALTIME CONNECTION
+    // MQTT REALTIME CONNECTION
     // ============================================================
-    let ablyClient = null;
-    let roomChannel = null;
+    let mqttClient = null;
+    const hostTopic = `ff/v1/${secret}/host`;
+    const phoneTopic = `ff/v1/${secret}/phone`;
 
-    function connectAbly() {
+    function connectMqtt() {
       if (gameOver) return;
 
       connLbl.textContent = "Connecting...";
@@ -420,140 +437,158 @@
       status.textContent = "Connecting to host...";
 
       try {
-        if (ablyClient) {
-          ablyClient.close();
-        }
+        if (mqttClient) mqttClient.end(true);
       } catch (e) {}
 
-      const clientId = `phone-${room}-t${team}-${deviceId.slice(0, 8)}`;
-      ablyClient = new Ably.Realtime({
-        key: ABLY_KEY,
+      const clientId = `ff_p_${team}_${deviceId.slice(0, 6)}_${Math.random().toString(16).slice(2, 6)}`;
+      console.log("[MQTT Phone] Connecting to:", MQTT_BROKER, "topic prefix:", `ff/v1/${secret}`);
+
+      mqttClient = mqtt.connect(MQTT_BROKER, {
         clientId: clientId,
-        echoMessages: false
+        clean: true,
+        connectTimeout: 5000,
+        reconnectPeriod: 2000,
+        keepalive: 30
       });
 
-      const channelName = `feud-${room}`;
-      roomChannel = ablyClient.channels.get(channelName);
-
-      ablyClient.connection.on("connected", () => {
-        console.log("[Ably Phone] Connected to Ably Realtime!");
+      mqttClient.on("connect", () => {
+        console.log("[MQTT Phone] Connected to broker!");
         connLbl.textContent = "CONNECTED";
         connLbl.style.color = "#4ade80";
         status.textContent = "Connected! Waiting for host...";
 
-        // Announce join to host
-        roomChannel.publish("phone_join", {
-          team: team,
-          name: name,
-          deviceId: deviceId
+        // Subscribe to messages from host
+        mqttClient.subscribe(hostTopic, { qos: 0 }, (err) => {
+          if (err) {
+            console.error("[MQTT Phone] Subscribe error:", err);
+            return;
+          }
+          // Announce phone join to host
+          publishToHost({
+            type: "PHONE_JOIN",
+            team: team,
+            name: name,
+            deviceId: deviceId
+          });
         });
-
-        // Register in Presence
-        roomChannel.presence.enter({
-          role: "phone",
-          team: team,
-          name: name,
-          deviceId: deviceId
-        }).catch(err => console.warn("Presence enter:", err));
       });
 
-      ablyClient.connection.on("connecting", () => {
-        connLbl.textContent = "Connecting...";
-        connLbl.style.color = "#facc15";
-        status.textContent = "Connecting to host...";
-      });
-
-      ablyClient.connection.on("disconnected", () => {
+      mqttClient.on("reconnect", () => {
         connLbl.textContent = "Reconnecting...";
         connLbl.style.color = "#f87171";
         status.textContent = "Reconnecting to host...";
       });
 
-      ablyClient.connection.on("suspended", () => {
-        connLbl.textContent = "Reconnecting...";
+      mqttClient.on("offline", () => {
+        connLbl.textContent = "DISCONNECTED";
         connLbl.style.color = "#f87171";
-        status.textContent = "Connection suspended, retrying...";
+        status.textContent = "Connection offline. Reconnecting...";
       });
 
-      ablyClient.connection.on("failed", (err) => {
-        console.error("[Ably Phone Error]:", err);
-        connLbl.textContent = "FAILED";
-        connLbl.style.color = "#f87171";
-        status.textContent = "Connection failed. Please refresh.";
+      mqttClient.on("error", (err) => {
+        console.error("[MQTT Phone Error]:", err);
       });
 
-      // Host ACK on join
-      roomChannel.subscribe("phone_ack", (msg) => {
-        const data = msg.data;
-        if (data && Number(data.team) === team) {
-          console.log("[Ably Phone] Received phone_ack:", data);
+      mqttClient.on("message", (topic, payload) => {
+        if (topic !== hostTopic) return;
+        try {
+          const msg = JSON.parse(payload.toString());
+          handleHostMessage(msg);
+        } catch (e) {
+          console.warn("[MQTT Phone] Message parse error:", e);
+        }
+      });
+    }
+
+    function publishToHost(payload) {
+      if (!mqttClient || !mqttClient.connected) return;
+      mqttClient.publish(phoneTopic, JSON.stringify(payload), { qos: 0 });
+    }
+
+    function handleHostMessage(msg) {
+      if (!msg || typeof msg !== "object") return;
+      console.log("[MQTT Phone] Received host message:", msg);
+
+      if (msg.type === "PHONE_ACK") {
+        if (Number(msg.team) === team) {
           connLbl.textContent = "CONNECTED";
           connLbl.style.color = "#4ade80";
-          if (data.armed) {
+          if (msg.inLobby) {
+            setLobbyTestMode();
+          } else if (msg.armed) {
             setArmed();
           } else {
             setStandby("Connected & Ready! Waiting for face-off...");
           }
         }
-      });
-
-      // Host ARM buzzers
-      roomChannel.subscribe("arm", (msg) => {
-        console.log("[Ably Phone] Received ARM");
+      } else if (msg.type === "GAME_STARTED") {
+        isLobbyTest = false;
+        setStandby("Game started! Waiting for face-off...");
+      } else if (msg.type === "ARM") {
         setArmed();
-      });
-
-      // Host LOCK buzzers
-      roomChannel.subscribe("lock", (msg) => {
-        console.log("[Ably Phone] Received LOCK:", msg.data);
-        setLocked(msg.data?.winnerTeam);
-      });
-
-      // Host RESET buzzers
-      roomChannel.subscribe("reset", (msg) => {
-        console.log("[Ably Phone] Received RESET");
+      } else if (msg.type === "LOCK") {
+        setLocked(msg.winnerTeam);
+      } else if (msg.type === "RESET") {
         setStandby("Waiting for next face-off...");
-      });
-
-      // Host GAME OVER
-      roomChannel.subscribe("game_over", (msg) => {
-        console.log("[Ably Phone] Received GAME_OVER");
+      } else if (msg.type === "GAME_OVER") {
         setGameOver();
-      });
+      }
     }
 
     // ============================================================
     // BUZZ FUNCTION
     // ============================================================
     function buzz() {
-      if (!phoneArmed || phoneBuzzed || gameOver) return;
-      if (!roomChannel || ablyClient?.connection?.state !== "connected") {
-        console.warn("[Buzz Ignored] Not connected yet.");
+      if (gameOver) return;
+
+      if (!phoneArmed) {
+        status.textContent = "Buzzer locked until host reveals question!";
+        navigator.vibrate?.([40]);
+        setTimeout(() => {
+          if (!phoneArmed && !gameOver) {
+            status.textContent = isLobbyTest ? "Tap button to test buzzer." : "Waiting for face-off...";
+          }
+        }, 2000);
+        return;
+      }
+
+      if (phoneBuzzed) return;
+
+      if (!mqttClient || !mqttClient.connected) {
+        console.warn("[Buzz Ignored] MQTT not connected.");
         status.textContent = "Connecting to host...";
         return;
       }
+
       phoneBuzzed = true;
-      phoneArmed = false;
-      btn.disabled = true;
       if (woodBoard) woodBoard.classList.add("buzzed");
       navigator.vibrate?.([80]);
 
       const payload = {
+        type: "BUZZ",
         team: team,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        isTest: isLobbyTest
       };
       console.log("[Phone Buzzing!] Sending payload:", payload);
 
-      roomChannel.publish("buzz", payload, (err) => {
-        if (err) {
-          console.error("Buzz publish error:", err);
-          phoneBuzzed = false;
-          phoneArmed = true;
-          btn.disabled = false;
-          if (woodBoard) woodBoard.classList.remove("buzzed");
-          status.textContent = "Buzz send failed. Try again!";
-        }
-      });
+      if (isLobbyTest) {
+        btn.textContent = "BUZZ TEST OK!";
+        status.textContent = "Buzzer working! Check host screen.";
+        setTimeout(() => {
+          if (isLobbyTest && !gameOver) {
+            phoneBuzzed = false;
+            btn.className = "armed";
+            btn.textContent = "TEST BUZZ!";
+            status.textContent = "Tap button to test buzzer.";
+            if (woodBoard) woodBoard.classList.remove("buzzed");
+          }
+        }, 1200);
+      } else {
+        btn.textContent = "BUZZED!";
+      }
+
+      publishToHost(payload);
     }
 
     // Button event listeners
@@ -576,10 +611,10 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         if (!teamRejected && !gameOver) {
-          if (ablyClient?.connection?.state !== "connected") {
-            connectAbly();
-          } else if (roomChannel) {
-            roomChannel.publish("phone_join", { team, name, deviceId });
+          if (!mqttClient || !mqttClient.connected) {
+            connectMqtt();
+          } else {
+            publishToHost({ type: "PHONE_JOIN", team, name, deviceId });
           }
         }
         if ("wakeLock" in navigator) {
@@ -589,14 +624,14 @@
     });
 
     window.addEventListener("pageshow", () => {
-      if (!teamRejected && !gameOver && ablyClient?.connection?.state !== "connected") {
-        connectAbly();
+      if (!teamRejected && !gameOver && (!mqttClient || !mqttClient.connected)) {
+        connectMqtt();
       }
     });
 
     window.addEventListener("online", () => {
-      if (!teamRejected && !gameOver && ablyClient?.connection?.state !== "connected") {
-        connectAbly();
+      if (!teamRejected && !gameOver && (!mqttClient || !mqttClient.connected)) {
+        connectMqtt();
       }
     });
 
@@ -608,7 +643,7 @@
     // START
     // ============================================================
     setStandby();
-    connectAbly();
+    connectMqtt();
   </script>
 </body>
 

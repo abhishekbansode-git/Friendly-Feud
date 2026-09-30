@@ -7,7 +7,7 @@
     <title>Friendly Feud Host</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔔</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+    <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -5583,14 +5583,24 @@
             };
         });
         /* ============================================================
-   ABLY REALTIME - ULTRA LOW LATENCY, ZERO CONFIG, 100% RELIABLE
+   PURE MQTT REALTIME - ZERO KEYS, ZERO CONFIG, 100% RELIABLE
    ============================================================ */
-        const ABLY_KEY = "2si6sA.z6skSQ:20dS9MQwEoR2E70VHWSnePpXyMQuZgKlCRwFdnuyDms";
+        const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+        const MQTT_FALLBACK_BROKER = "wss://broker.emqx.io:8084/mqtt";
+
         let roomCode = sessionStorage.getItem("feud_host_room") || Math.random().toString(36).substring(2, 6).toUpperCase();
         sessionStorage.setItem("feud_host_room", roomCode);
 
-        let ablyClient = null;
-        let roomChannel = null;
+        let roomSecret = sessionStorage.getItem("feud_host_secret");
+        if (!roomSecret) {
+            roomSecret = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 16);
+            sessionStorage.setItem("feud_host_secret", roomSecret);
+        }
+
+        let mqttClient = null;
+        let inGame = false;
+        const hostTopic = `ff/v1/${roomSecret}/host`;
+        const phoneTopic = `ff/v1/${roomSecret}/phone`;
 
         const peers = {
             0: { connected: false, name: "Team 1", deviceId: null },
@@ -5601,88 +5611,73 @@
         let winningTeam = null;
         let buzzersEverConnected = false;
 
-        function initHostAbly() {
-            if (ablyClient && ablyClient.connection && ablyClient.connection.state === "connected") {
-                return;
-            }
+        function initHostMqtt() {
+            if (mqttClient && mqttClient.connected) return;
+
             try {
-                if (ablyClient) ablyClient.close();
+                if (mqttClient) mqttClient.end(true);
             } catch (e) {}
 
-            const channelName = `feud-${roomCode}`;
-            console.log("[Ably Host] Connecting to channel:", channelName);
+            const clientId = `ff_h_${roomCode}_${Math.random().toString(16).slice(2, 8)}`;
+            console.log("[MQTT Host] Connecting to:", MQTT_BROKER, "Topic prefix:", `ff/v1/${roomSecret}`);
 
-            ablyClient = new Ably.Realtime({
-                key: ABLY_KEY,
-                clientId: `host-${roomCode}`,
-                echoMessages: false
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                clientId: clientId,
+                clean: true,
+                connectTimeout: 5000,
+                reconnectPeriod: 2000,
+                keepalive: 30
             });
 
-            roomChannel = ablyClient.channels.get(channelName);
-
-            ablyClient.connection.on("connected", () => {
-                console.log("[Ably Host Ready] Connected to Ably Realtime!");
-                // Host enters presence
-                roomChannel.presence.enter({ role: "host", room: roomCode }).catch(err => console.warn("Host presence enter:", err));
-
-                // Check active presence in case host refreshed during game
-                roomChannel.presence.get((err, members) => {
-                    if (!err && members) {
-                        members.forEach(m => {
-                            if (m.data && m.data.role === "phone" && (m.data.team === 0 || m.data.team === 1)) {
-                                handlePhoneJoin(m.data);
-                            }
-                        });
-                    }
+            mqttClient.on("connect", () => {
+                console.log("[MQTT Host Ready] Connected to broker!");
+                mqttClient.subscribe(phoneTopic, { qos: 0 }, (err) => {
+                    if (err) console.error("[MQTT Host] Subscribe error:", err);
+                    else console.log("[MQTT Host] Subscribed to phone events on:", phoneTopic);
                 });
             });
 
-            ablyClient.connection.on("disconnected", () => {
-                console.warn("[Ably Host] Disconnected from Ably, reconnecting...");
+            mqttClient.on("reconnect", () => {
+                console.warn("[MQTT Host] Reconnecting to broker...");
             });
 
-            ablyClient.connection.on("failed", (err) => {
-                console.error("[Ably Host] Connection failed:", err);
+            mqttClient.on("offline", () => {
+                console.warn("[MQTT Host] Offline from broker.");
             });
 
-            // Listen for phone direct join announcements
-            roomChannel.subscribe("phone_join", (msg) => {
-                const data = msg.data;
-                if (data && (data.team === 0 || data.team === 1)) {
-                    handlePhoneJoin(data);
+            mqttClient.on("error", (err) => {
+                console.error("[MQTT Host Error]:", err);
+            });
+
+            mqttClient.on("message", (topic, payload) => {
+                if (topic !== phoneTopic) return;
+                try {
+                    const msg = JSON.parse(payload.toString());
+                    handlePhoneIncoming(msg);
+                } catch (e) {
+                    console.warn("[MQTT Host] Incoming message parse error:", e);
                 }
             });
+        }
 
-            // Listen for phone presence events
-            roomChannel.presence.subscribe(["enter", "update"], (pMsg) => {
-                if (pMsg.data && pMsg.data.role === "phone" && (pMsg.data.team === 0 || pMsg.data.team === 1)) {
-                    handlePhoneJoin(pMsg.data);
-                }
-            });
+        function publishToPhones(payload) {
+            if (!mqttClient || !mqttClient.connected) return;
+            mqttClient.publish(hostTopic, JSON.stringify(payload), { qos: 0 });
+        }
 
-            roomChannel.presence.subscribe("leave", (pMsg) => {
-                if (pMsg.data && pMsg.data.role === "phone") {
-                    const team = Number(pMsg.data.team);
-                    if (team === 0 || team === 1) {
-                        console.log(`[Ably Host] Phone left presence: Team ${team}`);
-                        roomChannel.presence.get((err, members) => {
-                            const stillPresent = !err && members && members.some(m => m.data && m.data.role === "phone" && Number(m.data.team) === team);
-                            if (!stillPresent) {
-                                peers[team].connected = false;
-                                updateWebRTCLobbyState();
-                            }
-                        });
-                    }
-                }
-            });
+        function handlePhoneIncoming(msg) {
+            if (!msg || typeof msg !== "object") return;
+            console.log("[Host Received from Phone]:", msg);
 
-            // Listen for buzzer buzzes
-            roomChannel.subscribe("buzz", (msg) => {
-                const data = msg.data;
-                if (data && (data.team === 0 || data.team === 1)) {
-                    handleBuzzerMessage(Number(data.team), data);
+            if (msg.type === "PHONE_JOIN") {
+                handlePhoneJoin(msg);
+            } else if (msg.type === "BUZZ") {
+                if (msg.isTest) {
+                    handleTestBuzz(Number(msg.team));
+                } else {
+                    handleTeamBuzz(Number(msg.team));
                 }
-            });
+            }
         }
 
         function handlePhoneJoin(data) {
@@ -5691,61 +5686,57 @@
                 ? (document.getElementById("team1-input")?.value?.trim() || data.name || "TEAM 1")
                 : (document.getElementById("team2-input")?.value?.trim() || data.name || "TEAM 2");
 
-            console.log(`[Ably Host] Phone Registered: Team ${team} (${teamName})`);
+            console.log(`[MQTT Host] Phone Connected: Team ${team} (${teamName})`);
             peers[team].connected = true;
             peers[team].name = teamName;
             peers[team].deviceId = data.deviceId;
             buzzersEverConnected = true;
             updateWebRTCLobbyState();
 
-            // Send acknowledgment back so phone knows it is connected
-            if (roomChannel) {
-                roomChannel.publish("phone_ack", {
-                    team: team,
-                    name: teamName,
-                    armed: buzzersArmed
-                });
+            publishToPhones({
+                type: "PHONE_ACK",
+                team: team,
+                name: teamName,
+                inLobby: !inGame,
+                armed: inGame ? buzzersArmed : true
+            });
+        }
+
+        function handleTestBuzz(team) {
+            console.log(`[Host] Test buzz from Team ${team}!`);
+            playTeamBuzzer();
+            const teamName = team === 0
+                ? (document.getElementById("team1-input")?.value?.trim() || "TEAM 1")
+                : (document.getElementById("team2-input")?.value?.trim() || "TEAM 2");
+
+            const toast = document.getElementById("buzzer-toast");
+            const msgEl = document.getElementById("buzzer-toast-msg");
+            if (msgEl) {
+                msgEl.textContent = `🔔 ${teamName.toUpperCase()} BUZZER WORKING!`;
+            }
+            if (buzzerToastTimer) {
+                clearTimeout(buzzerToastTimer);
+                buzzerToastTimer = null;
+            }
+            if (toast) {
+                toast.style.background = "#16a34a";
+                toast.style.color = "#ffffff";
+                toast.style.border = "2px solid rgb(255, 197, 0)";
+                toast.classList.remove("hidden");
+                buzzerToastTimer = setTimeout(() => {
+                    toast.classList.add("hidden");
+                }, 3000);
+            }
+
+            const panel = document.getElementById(`panel-${team}`);
+            if (panel) {
+                panel.style.boxShadow = "0 0 60px rgba(34,197,94,1), 0 0 100px rgba(34,197,94,0.6)";
+                setTimeout(() => {
+                    updateWebRTCLobbyState();
+                }, 800);
             }
         }
 
-        function sendToTeam(team, message) {
-            if (roomChannel) {
-                const eventName = message.type ? message.type.toLowerCase() : "message";
-                roomChannel.publish(eventName, Object.assign({}, message, { targetTeam: team }));
-            }
-        }
-
-        function sendToBothTeams(message) {
-            if (roomChannel) {
-                const eventName = message.type ? message.type.toLowerCase() : "message";
-                roomChannel.publish(eventName, message);
-            }
-        }
-
-        function notifyGameOverAndCloseConnections() {
-            if (roomChannel) {
-                roomChannel.publish("game_over", { type: "GAME_OVER", timestamp: Date.now() });
-            }
-            setTimeout(() => {
-                peers[0].connected = false;
-                peers[1].connected = false;
-                updateWebRTCLobbyState();
-            }, 300);
-        }
-
-        function handleBuzzerMessage(team, rawMessage) {
-            try {
-                const msg = typeof rawMessage === "string" ? JSON.parse(rawMessage) : rawMessage;
-                console.log(`[Host Received Message] from Team ${team}:`, msg);
-                handleTeamBuzz(team);
-            } catch (error) {
-                console.error("handleBuzzerMessage error:", error);
-            }
-        }
-
-        /* ------------------------------------------------------------
-           HOST AUTHORITATIVE BUZZER
-           ------------------------------------------------------------ */
         function handleTeamBuzz(team) {
             if (!buzzersArmed) return;
             if (winningTeam !== null) return;
@@ -5766,14 +5757,11 @@
                 }
             }
 
-            // Lock both phones immediately via Ably
-            if (roomChannel) {
-                roomChannel.publish("lock", {
-                    type: "LOCK",
-                    winnerTeam: team,
-                    timestamp: Date.now()
-                });
-            }
+            publishToPhones({
+                type: "LOCK",
+                winnerTeam: team,
+                timestamp: Date.now()
+            });
 
             const teamName = team === 0
                 ? (document.getElementById("team1-input")?.value?.trim() || "TEAM 1")
@@ -5799,24 +5787,18 @@
             }
         }
 
-        /* ------------------------------------------------------------
-           ARM BUZZERS
-           ------------------------------------------------------------ */
         function armBuzzers() {
             initAudio();
             clearTeamBuzzVisuals();
             winningTeam = null;
             buzzersArmed = true;
 
+            publishToPhones({
+                type: "ARM",
+                timestamp: Date.now()
+            });
+
             const anyPhoneConnected = peers[0].connected || peers[1].connected;
-
-            if (roomChannel) {
-                roomChannel.publish("arm", {
-                    type: "ARM",
-                    timestamp: Date.now()
-                });
-            }
-
             if (!anyPhoneConnected) return;
 
             const toast = document.getElementById("buzzer-toast");
@@ -5836,20 +5818,15 @@
             }
         }
 
-        /* ------------------------------------------------------------
-           RESET BUZZERS
-           ------------------------------------------------------------ */
         function resetBuzzers() {
             clearTeamBuzzVisuals();
             buzzersArmed = false;
             winningTeam = null;
 
-            if (roomChannel) {
-                roomChannel.publish("reset", {
-                    type: "RESET",
-                    timestamp: Date.now()
-                });
-            }
+            publishToPhones({
+                type: "RESET",
+                timestamp: Date.now()
+            });
 
             if (buzzerToastTimer) {
                 clearTimeout(buzzerToastTimer);
@@ -5861,6 +5838,15 @@
             }
         }
 
+        function notifyGameOverAndCloseConnections() {
+            publishToPhones({ type: "GAME_OVER", timestamp: Date.now() });
+            setTimeout(() => {
+                peers[0].connected = false;
+                peers[1].connected = false;
+                updateWebRTCLobbyState();
+            }, 300);
+        }
+
         function clearTeamBuzzVisuals() {
             const lbl1 = document.getElementById("label-team1");
             const lbl2 = document.getElementById("label-team2");
@@ -5868,9 +5854,6 @@
             if (lbl2) lbl2.classList.remove("buzzered");
         }
 
-        /* ------------------------------------------------------------
-           LOBBY STATUS
-           ------------------------------------------------------------ */
         function updateWebRTCLobbyState() {
             const t0 = peers[0].connected;
             const t1 = peers[1].connected;
@@ -5976,7 +5959,7 @@
                 playBtn.style.borderColor = "#dc2626";
                 playBtn.textContent = "START GAME";
                 if (heading) { heading.textContent = "BOTH PHONES CONNECTED!"; heading.style.color = "#16a34a"; }
-                if (sub) { sub.textContent = "Your buzzers are ready. Let’s play!"; sub.style.color = "#16a34a"; }
+                if (sub) { sub.textContent = "Tap TEST BUZZ on phone to try! Then click START."; sub.style.color = "#16a34a"; }
                 if (orDivider) orDivider.style.visibility = "hidden";
             } else if (count === 1) {
                 playBtn.style.background = "linear-gradient(135deg, #d32f2f, #a21a1a)";
@@ -5995,10 +5978,8 @@
             }
         }
 
-        /* ------------------------------------------------------------
-           CREATE ROOM
-           ------------------------------------------------------------ */
         function createRoom() {
+            inGame = false;
             const t1 = document.getElementById("team1-input").value.trim() || "TEAM 1";
             const t2 = document.getElementById("team2-input").value.trim() || "TEAM 2";
             showView("lobby-view");
@@ -6007,13 +5988,12 @@
             document.getElementById("t0-title").textContent = t1;
             document.getElementById("t1-title").textContent = t2;
 
-            // Start Ably Realtime Room
-            initHostAbly();
+            initHostMqtt();
 
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
             let basePhoneUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1) + 'phone.html';
-            const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
-            const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
+            const team0Url = `${basePhoneUrl}?room=${roomCode}&secret=${roomSecret}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
+            const team1Url = `${basePhoneUrl}?room=${roomCode}&secret=${roomSecret}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
             const qr0 = document.getElementById("qr-0");
             const qr1 = document.getElementById("qr-1");
@@ -6023,16 +6003,12 @@
             if (qr1) new QRCode(qr1, { text: team1Url, width: 560, height: 560 });
         }
 
-        /* ------------------------------------------------------------
-           GAME
-           ------------------------------------------------------------ */
         function enterGame() {
+            inGame = true;
+            publishToPhones({ type: "GAME_STARTED", timestamp: Date.now() });
             startGameWithTeams();
         }
 
-        /* ------------------------------------------------------------
-           QR MODAL
-           ------------------------------------------------------------ */
         function openQrModal() {
             const modal = document.getElementById("qr-modal");
             modal.classList.remove("hidden");
@@ -6048,8 +6024,8 @@
             qrBox1.innerHTML = "";
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
             let basePhoneUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1) + 'phone.html';
-            const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
-            const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
+            const team0Url = `${basePhoneUrl}?room=${roomCode}&secret=${roomSecret}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
+            const team1Url = `${basePhoneUrl}?room=${roomCode}&secret=${roomSecret}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
             if (qrBox0) new QRCode(qrBox0, { text: team0Url, width: 560, height: 560 });
             if (qrBox1) new QRCode(qrBox1, { text: team1Url, width: 560, height: 560 });
@@ -6078,21 +6054,14 @@
         }
 
         function goBackToSetup() {
+            inGame = false;
             showView("team-setup-view");
         }
 
-        /* ------------------------------------------------------------
-           INITIALIZE
-           ------------------------------------------------------------ */
         updateWebRTCLobbyState();
 
-        /* ------------------------------------------------------------
-           PAGE HIDE — notify phones when host tab closes / refreshes
-           ------------------------------------------------------------ */
         window.addEventListener('pagehide', () => {
-            if (roomChannel) {
-                roomChannel.publish("game_over", { type: "GAME_OVER", timestamp: Date.now() });
-            }
+            publishToPhones({ type: "GAME_OVER", timestamp: Date.now() });
         });
 
 </script>
