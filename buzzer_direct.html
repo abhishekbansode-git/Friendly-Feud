@@ -644,7 +644,8 @@
           }
         });
 
-        conn.on("open", () => {
+        const handleOpen = () => {
+          console.log("[DataChannel Open] Connected to host!");
           isConnecting = false;
           activeConn = conn;
           connLbl.textContent = "CONNECTED";
@@ -652,7 +653,13 @@
           if (dot) dot.classList.add("connected");
           status.textContent = "Connected to host. Waiting for face-off...";
           setStandby("Connected to host. Waiting for face-off...");
-        });
+        };
+
+        if (conn.open) {
+          handleOpen();
+        } else {
+          conn.on("open", handleOpen);
+        }
 
         conn.on("data", (data) => {
           handleIncomingMessage(data);

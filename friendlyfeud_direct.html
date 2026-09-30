@@ -5633,7 +5633,8 @@
                 peers[team].conn = conn;
                 peers[team].name = teamName;
 
-                conn.on("open", () => {
+                const handleOpen = () => {
+                    console.log(`[DataChannel Open] Team ${team}`);
                     peers[team].connected = true;
                     buzzersEverConnected = true;
                     updateWebRTCLobbyState();
@@ -5643,7 +5644,13 @@
                             conn.send({ type: "ARM" });
                         }
                     } catch (err) {}
-                });
+                };
+
+                if (conn.open) {
+                    handleOpen();
+                } else {
+                    conn.on("open", handleOpen);
+                }
 
                 conn.on("data", (data) => {
                     handleBuzzerMessage(team, data);
@@ -6106,7 +6113,12 @@
              * room + team + phone page.
              */
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
-            const basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
+            let basePhoneUrl;
+            if (/friendlyfeud_direct\.html/i.test(currentUrl)) {
+                basePhoneUrl = currentUrl.replace(/friendlyfeud_direct\.html/i, 'buzzer_direct.html');
+            } else {
+                basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
+            }
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
             const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
@@ -6162,7 +6174,12 @@
             qrBox0.innerHTML = "";
             qrBox1.innerHTML = "";
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
-            const basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
+            let basePhoneUrl;
+            if (/friendlyfeud_direct\.html/i.test(currentUrl)) {
+                basePhoneUrl = currentUrl.replace(/friendlyfeud_direct\.html/i, 'buzzer_direct.html');
+            } else {
+                basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
+            }
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
             const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
