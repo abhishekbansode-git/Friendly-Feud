@@ -663,8 +663,10 @@
     function buzz() {
       if (!phoneArmed || phoneBuzzed || gameOver) return;
       const isDcOpen = activeConn?.dataChannel?.readyState === "open";
-      if (!activeConn || (!activeConn.open && !isDcOpen)) {
-        console.warn("[Buzz Ignored] Connection not open yet. activeConn:", activeConn);
+      const isWebRtcOpen = activeConn && (activeConn.open || isDcOpen);
+      // Block buzz only if BOTH WebRTC AND Firebase are unavailable
+      if (!isWebRtcOpen && !_fbConnected) {
+        console.warn("[Buzz Ignored] No connection available yet.");
         status.textContent = "Connecting to host...";
         return;
       }
@@ -683,7 +685,7 @@
       console.log("[Phone Buzzing!] Sending payload:", payload);
 
       let sent = false;
-      if (activeConn.open) {
+      if (isWebRtcOpen && activeConn.open) {
         try {
           activeConn.send(payload);
           sent = true;
@@ -692,7 +694,7 @@
         }
       }
 
-      if (!sent && activeConn.dataChannel && activeConn.dataChannel.readyState === "open") {
+      if (!sent && isWebRtcOpen && activeConn.dataChannel && activeConn.dataChannel.readyState === "open") {
         try {
           activeConn.dataChannel.send(JSON.stringify(payload));
           sent = true;
