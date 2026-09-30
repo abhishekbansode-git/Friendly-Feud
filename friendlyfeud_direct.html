@@ -5615,7 +5615,21 @@
                     iceServers: [
                         { urls: "stun:stun.l.google.com:19302" },
                         { urls: "stun:stun1.l.google.com:19302" },
-                        { urls: "stun:stun2.l.google.com:19302" }
+                        {
+                            urls: "turn:openrelay.metered.ca:80",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        },
+                        {
+                            urls: "turn:openrelay.metered.ca:443",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        },
+                        {
+                            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        }
                     ]
                 }
             });
@@ -5633,8 +5647,11 @@
                 peers[team].conn = conn;
                 peers[team].name = teamName;
 
+                let opened = false;
                 const handleOpen = () => {
-                    console.log(`[DataChannel Open] Team ${team}`);
+                    if (opened) return;
+                    opened = true;
+                    console.log(`[DataChannel Open] Team ${team} is ready!`);
                     peers[team].connected = true;
                     buzzersEverConnected = true;
                     updateWebRTCLobbyState();
@@ -5643,13 +5660,29 @@
                         if (buzzersArmed) {
                             conn.send({ type: "ARM" });
                         }
-                    } catch (err) {}
+                    } catch (err) {
+                        console.error("send error:", err);
+                    }
                 };
 
                 if (conn.open) {
                     handleOpen();
                 } else {
                     conn.on("open", handleOpen);
+                }
+
+                if (conn.dataChannel) {
+                    conn.dataChannel.addEventListener("open", handleOpen);
+                }
+
+                if (conn.peerConnection) {
+                    conn.peerConnection.addEventListener("iceconnectionstatechange", () => {
+                        const state = conn.peerConnection.iceConnectionState;
+                        console.log(`[ICE Team ${team}]:`, state);
+                        if (state === "connected" || state === "completed") {
+                            setTimeout(handleOpen, 50);
+                        }
+                    });
                 }
 
                 conn.on("data", (data) => {

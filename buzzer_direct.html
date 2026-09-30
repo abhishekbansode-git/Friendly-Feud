@@ -602,10 +602,24 @@
           debug: 1,
           config: {
             iceServers: [
-              { urls: "stun:stun.l.google.com:19302" },
-              { urls: "stun:stun1.l.google.com:19302" },
-              { urls: "stun:stun2.l.google.com:19302" }
-            ]
+                        { urls: "stun:stun.l.google.com:19302" },
+                        { urls: "stun:stun1.l.google.com:19302" },
+                        {
+                            urls: "turn:openrelay.metered.ca:80",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        },
+                        {
+                            urls: "turn:openrelay.metered.ca:443",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        },
+                        {
+                            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                            username: "openrelayproject",
+                            credential: "openrelayproject"
+                        }
+                    ]
           }
         });
 
@@ -634,9 +648,10 @@
 
         const hostPeerId = `ff-host-${room}`;
         console.log("[PeerJS Phone] Connecting to host:", hostPeerId);
+        status.textContent = "Contacting game host...";
 
         const conn = phonePeer.connect(hostPeerId, {
-          reliable: true,
+          serialization: "json",
           metadata: {
             team: team,
             name: name,
@@ -644,21 +659,43 @@
           }
         });
 
+        let opened = false;
         const handleOpen = () => {
+          if (opened) return;
+          opened = true;
           console.log("[DataChannel Open] Connected to host!");
           isConnecting = false;
           activeConn = conn;
           connLbl.textContent = "CONNECTED";
           connLbl.style.color = "#4ade80";
           if (dot) dot.classList.add("connected");
-          status.textContent = "Connected to host. Waiting for face-off...";
-          setStandby("Connected to host. Waiting for face-off...");
+          status.textContent = "Connected to host! Waiting for face-off...";
+          setStandby("Connected to host! Waiting for face-off...");
         };
 
         if (conn.open) {
           handleOpen();
         } else {
           conn.on("open", handleOpen);
+        }
+
+        if (conn.dataChannel) {
+          conn.dataChannel.addEventListener("open", handleOpen);
+        }
+
+        if (conn.peerConnection) {
+          conn.peerConnection.addEventListener("iceconnectionstatechange", () => {
+            const state = conn.peerConnection.iceConnectionState;
+            console.log("[Phone ICE State]:", state);
+            if (state === "checking") {
+              status.textContent = "Pairing with host screen...";
+            } else if (state === "connected" || state === "completed") {
+              setTimeout(handleOpen, 50);
+            } else if (state === "failed") {
+              status.textContent = "Connection issue. Retrying...";
+              try { conn.close(); } catch(e) {}
+            }
+          });
         }
 
         conn.on("data", (data) => {
