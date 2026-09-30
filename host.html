@@ -5138,8 +5138,9 @@
             if (typeof resetBuzzers === 'function') resetBuzzers();
             state.round = 0;
             state.strikes = 0;
-            state.questionRevealed = false; // Fix logical bug
-            state.questionRevealed = false; // Fix logical bug
+            state.questionRevealed = false;
+            const qCard = document.getElementById('question-card');
+            if (qCard) qCard.classList.remove('revealed');
             for (let i = 1; i <= 3; i++) {
                 const dimStrike = document.getElementById(`dim-strike-${i}`);
                 if (dimStrike) {
@@ -5617,22 +5618,23 @@
                     iceServers: [
                         { urls: "stun:stun.l.google.com:19302" },
                         { urls: "stun:stun1.l.google.com:19302" },
+                        { urls: "stun:stun2.l.google.com:19302" },
+                        { urls: "stun:stun.cloudflare.com:3478" },
+                        { urls: "stun:openrelay.metered.ca:80" },
                         {
-                            urls: "turn:openrelay.metered.ca:80",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        },
-                        {
-                            urls: "turn:openrelay.metered.ca:443",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        },
-                        {
-                            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                            urls: [
+                                "turn:openrelay.metered.ca:80",
+                                "turn:openrelay.metered.ca:80?transport=tcp",
+                                "turn:openrelay.metered.ca:443",
+                                "turn:openrelay.metered.ca:443?transport=tcp",
+                                "turns:openrelay.metered.ca:443",
+                                "turns:openrelay.metered.ca:443?transport=tcp"
+                            ],
                             username: "openrelayproject",
                             credential: "openrelayproject"
                         }
-                    ]
+                    ],
+                    iceCandidatePoolSize: 10
                 }
             });
 
@@ -5690,6 +5692,15 @@
                             if (conn.open || conn.dataChannel?.readyState === "open") {
                                 markTeamReady();
                             }
+                        } else if (state === "disconnected") {
+                            setTimeout(() => {
+                                if (conn.peerConnection && conn.peerConnection.iceConnectionState === "disconnected") {
+                                    console.log(`[ICE Team ${team} Disconnected] Attempting ICE restart...`);
+                                    if (typeof conn.peerConnection.restartIce === "function") {
+                                        conn.peerConnection.restartIce();
+                                    }
+                                }
+                            }, 2500);
                         }
                     });
                 }
@@ -5880,14 +5891,6 @@
             sendToBothTeams({
                 type: "ARM"
             });
-            // Start heartbeat only for already-connected teams.
-            // If a phone connects after arm, channel.onopen handles it.
-            for (const t of [0, 1]) {
-                const p = peers[t];
-                if (p.connected && p.pc && p.channel && p.channel.readyState === "open") {
-                    startHeartbeat(t, p.pc, p.channel);
-                }
-            }
             /*
              * Show host confirmation only if at least one phone is connected.
              * If the user skipped buzzer setup, don't show the toast.
@@ -5928,9 +5931,6 @@
             clearTeamBuzzVisuals();
             buzzersArmed = false;
             winningTeam = null;
-            // Stop heartbeat — no need to monitor phones between face-offs
-            stopHeartbeat(0);
-            stopHeartbeat(1);
             /*
              * RESET goes directly over WebRTC.
              */

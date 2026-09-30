@@ -651,24 +651,25 @@
           debug: 1,
           config: {
             iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        { urls: "stun:stun1.l.google.com:19302" },
-                        {
-                            urls: "turn:openrelay.metered.ca:80",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        },
-                        {
-                            urls: "turn:openrelay.metered.ca:443",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        },
-                        {
-                            urls: "turn:openrelay.metered.ca:443?transport=tcp",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        }
-                    ]
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:stun1.l.google.com:19302" },
+              { urls: "stun:stun2.l.google.com:19302" },
+              { urls: "stun:stun.cloudflare.com:3478" },
+              { urls: "stun:openrelay.metered.ca:80" },
+              {
+                urls: [
+                  "turn:openrelay.metered.ca:80",
+                  "turn:openrelay.metered.ca:80?transport=tcp",
+                  "turn:openrelay.metered.ca:443",
+                  "turn:openrelay.metered.ca:443?transport=tcp",
+                  "turns:openrelay.metered.ca:443",
+                  "turns:openrelay.metered.ca:443?transport=tcp"
+                ],
+                username: "openrelayproject",
+                credential: "openrelayproject"
+              }
+            ],
+            iceCandidatePoolSize: 10
           }
         });
 
@@ -748,6 +749,15 @@
               if (conn.open || conn.dataChannel?.readyState === "open") {
                 handleOpen();
               }
+            } else if (state === "disconnected") {
+              setTimeout(() => {
+                if (conn.peerConnection && conn.peerConnection.iceConnectionState === "disconnected") {
+                  console.log("[ICE Disconnected] Attempting ICE restart...");
+                  if (typeof conn.peerConnection.restartIce === "function") {
+                    conn.peerConnection.restartIce();
+                  }
+                }
+              }, 2500);
             } else if (state === "failed") {
               status.textContent = "Connection issue. Retrying...";
               try { conn.close(); } catch(e) {}
