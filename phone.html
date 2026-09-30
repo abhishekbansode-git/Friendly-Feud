@@ -2,26 +2,7 @@
 <html lang="en">
 
 <head>
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <!-- Firebase SDK (fallback relay for same-network / ICE-fail scenarios) -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-      import { getDatabase, ref, set, onValue, remove, onDisconnect }
-        from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
-      const firebaseConfig = {
-        apiKey: "AIzaSyBhngPbopH7sLfZ3wH7kEZR290D9qSocQw",
-        authDomain: "friendly-feud-f45b2.firebaseapp.com",
-        databaseURL: "https://friendly-feud-f45b2-default-rtdb.firebaseio.com",
-        projectId: "friendly-feud-f45b2",
-        storageBucket: "friendly-feud-f45b2.firebasestorage.app",
-        messagingSenderId: "822642189799",
-        appId: "1:822642189799:web:453b5f4beed47584db8942"
-      };
-      const fbApp = initializeApp(firebaseConfig);
-      const fbDb  = getDatabase(fbApp);
-      window._ffDb       = fbDb;
-      window._ffFirebase = { ref, set, onValue, remove, onDisconnect };
-    </script>
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Friendly Feud Phone</title>
@@ -294,171 +275,74 @@
   </div>
   <script>
     // ============================================================
-    // DIRECT WI-FI WEBRTC CONFIGURATION
+    // ABLY REALTIME CONFIGURATION
     // ============================================================
-    const params = new URLSearchParams(window.location.search);
-    const urlHost = params.get("host");
-    const urlPort = params.get("port");
-    const storedHost = localStorage.getItem("feud_wifi_host");
-    const storedPort = localStorage.getItem("feud_wifi_port");
-    const defaultHost = window.location.hostname || "192.168.1.50";
-    const defaultPort = window.location.port || "3000";
+    const ABLY_KEY = "2si6sA.z6skSQ:20dS9MQwEoR2E70VHWSnePpXyMQuZgKlCRwFdnuyDms";
 
-    const wifiHost = urlHost || storedHost || defaultHost;
-    const wifiPort = urlPort || storedPort || defaultPort;
-    if (urlHost) localStorage.setItem("feud_wifi_host", urlHost);
-    if (urlPort) localStorage.setItem("feud_wifi_port", urlPort);
-
-    const SIGNALING_HOST = `${wifiHost}:${wifiPort}`;
     // ============================================================
     // URL / LOCAL STORAGE
     // ============================================================
+    const params = new URLSearchParams(window.location.search);
     let room = params.get("room");
     let team = params.get("team");
     let name = params.get("name");
     let color = params.get("color");
+
     if (room) {
       room = room.toUpperCase();
-      localStorage.setItem(
-        "feud_room",
-        room
-      );
-      if (team !== null) {
-        localStorage.setItem(
-          "feud_team",
-          team
-        );
-      }
-      if (name) {
-        localStorage.setItem(
-          "feud_name",
-          name
-        );
-      }
-      if (color) {
-        localStorage.setItem(
-          "feud_color",
-          color
-        );
-      }
+      localStorage.setItem("feud_room", room);
+      if (team !== null) localStorage.setItem("feud_team", team);
+      if (name) localStorage.setItem("feud_name", name);
+      if (color) localStorage.setItem("feud_color", color);
     } else {
-      room =
-        (
-          localStorage.getItem("feud_room") ||
-          ""
-        ).toUpperCase();
-      team =
-        localStorage.getItem("feud_team") ||
-        "0";
-      name =
-        localStorage.getItem("feud_name") ||
-        "Team " +
-        (parseInt(team, 10) + 1);
-      color =
-        localStorage.getItem("feud_color") ||
-        "#3b82f6";
+      room = (localStorage.getItem("feud_room") || "").toUpperCase();
+      team = localStorage.getItem("feud_team") || "0";
+      name = localStorage.getItem("feud_name") || ("Team " + (parseInt(team, 10) + 1));
+      color = localStorage.getItem("feud_color") || "#3b82f6";
     }
     team = Number(team);
+
     // ============================================================
     // VALIDATION
     // ============================================================
-    if (
-      !room ||
-      room.length !== 4 ||
-      (team !== 0 && team !== 1)
-    ) {
-      document.getElementById(
-        "status-text"
-      ).textContent =
-        "Invalid room or team. Please scan QR again.";
-      document.getElementById(
-        "conn-lbl"
-      ).textContent =
-        "Invalid";
-      throw new Error(
-        "Invalid room/team"
-      );
+    if (!room || room.length !== 4 || (team !== 0 && team !== 1)) {
+      document.getElementById("status-text").textContent = "Invalid room or team. Please scan QR again.";
+      document.getElementById("conn-lbl").textContent = "Invalid";
+      throw new Error("Invalid room/team");
     }
+
     // ============================================================
     // UI REFERENCES
     // ============================================================
-    document.documentElement.style.setProperty(
-      "--team-color",
-      color
-    );
+    document.documentElement.style.setProperty("--team-color", color);
     const roomLbl = document.getElementById("room-lbl");
-    if (roomLbl) {
-      roomLbl.textContent = room;
-    }
-    document.getElementById(
-      "team-title"
-    ).textContent =
-      name;
-    document.getElementById(
-      "team-title"
-    ).style.color =
-      color;
-    const btn =
-      document.getElementById(
-        "buzz-btn"
-      );
-    const status =
-      document.getElementById(
-        "status-text"
-      );
-    const connLbl =
-      document.getElementById(
-        "conn-lbl"
-      );
-    const woodBoard =
-      document.getElementById(
-        "wood-board"
-      );
+    if (roomLbl) roomLbl.textContent = room;
+    document.getElementById("team-title").textContent = name;
+    document.getElementById("team-title").style.color = color;
+    const btn = document.getElementById("buzz-btn");
+    const status = document.getElementById("status-text");
+    const connLbl = document.getElementById("conn-lbl");
+    const woodBoard = document.getElementById("wood-board");
     const gameOverScreen = document.getElementById("game-over-screen");
+
     // ============================================================
-    // SIGNALING / WEBRTC STATE
-    // ============================================================
-    let signalingWs = null;
-    let peer = null;
-    let channel = null;
-    let candidateQueue = [];
-    let remoteDescriptionSet = false;
-    // Only one peer creation may run at a time (prevents race conditions).
-    let peerCreationPromise = null;
-    /*
-     * Every peer gets a generation number.
-     *
-     * Events belonging to an old peer are ignored after
-     * that peer has been replaced or closed.
-     */
-    let peerGeneration = 0;
-    // ============================================================
-    // SIGNALING RECONNECT STATE
-    // ============================================================
-    let reconnectTimer = null;
-    // WebRTC-only recovery timer. The signaling WebSocket stays open.
-    let peerRecoveryTimer = null;
-    let peerRecoveryInProgress = false;
-    let peerRecoveryDelay = 1500;
-    let retryDelay = 1000;
-    const MAX_RETRY_DELAY = 15000;
-    // ============================================================
-    // GAME STATE
+    // GAME STATE & DEVICE ID
     // ============================================================
     let phoneArmed = false;
     let phoneBuzzed = false;
     let gameOver = false;
-    /*
-     * Prevent a phone rejected by the server from repeatedly
-     * reconnecting.
-     */
     let teamRejected = false;
+
     const deviceId = (() => {
       const key = "ff_device_id";
       let id = localStorage.getItem(key);
-      if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()); localStorage.setItem(key, id); }
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now());
+        localStorage.setItem(key, id);
+      }
       return id;
     })();
+
     // ============================================================
     // UI FUNCTIONS
     // ============================================================
@@ -476,16 +360,12 @@
         gameOverScreen.onclick = () => {
           gameOver = false;
           gameOverScreen.classList.remove("active");
-          connectPeer();
+          connectAbly();
         };
       }
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-      if (peerRecoveryTimer) { clearTimeout(peerRecoveryTimer); peerRecoveryTimer = null; }
-      if (signalingWs) { try { signalingWs.close(); } catch (error) { } }
     }
-    function setStandby(
-      text = "Waiting for host..."
-    ) {
+
+    function setStandby(text = "Waiting for host...") {
       if (gameOver) return;
       phoneArmed = false;
       phoneBuzzed = false;
@@ -493,187 +373,162 @@
       btn.className = "";
       btn.textContent = "STANDBY";
       status.textContent = text;
-      if (woodBoard) {
-        woodBoard.classList.remove("buzzed");
-      }
+      if (woodBoard) woodBoard.classList.remove("buzzed");
     }
+
     function setArmed() {
-      if (teamRejected || gameOver) {
-        return;
-      }
+      if (teamRejected || gameOver) return;
       phoneArmed = true;
       phoneBuzzed = false;
       btn.disabled = false;
       btn.className = "armed";
       btn.textContent = "BUZZ!";
       status.textContent = "TAP NOW!";
-      if (woodBoard) {
-        woodBoard.classList.remove("buzzed");
-      }
-      navigator.vibrate?.([
-        80,
-        40,
-        80
-      ]);
+      if (woodBoard) woodBoard.classList.remove("buzzed");
+      navigator.vibrate?.([80, 40, 80]);
     }
+
     function setLocked(winnerTeam) {
       phoneArmed = false;
       btn.disabled = true;
-      btn.classList.remove(
-        "armed",
-        "countdown"
-      );
-      if (
-        Number(winnerTeam) === team
-      ) {
-        btn.classList.add(
-          "winner"
-        );
-        if (woodBoard) {
-          woodBoard.classList.add("buzzed");
-        }
-        btn.textContent =
-          "YOU BUZZED!";
-        status.textContent =
-          "You got in first! Answer now.";
-        navigator.vibrate?.([
-          100,
-          50,
-          100
-        ]);
+      btn.classList.remove("armed", "countdown");
+      if (Number(winnerTeam) === team) {
+        btn.classList.add("winner");
+        if (woodBoard) woodBoard.classList.add("buzzed");
+        btn.textContent = "YOU BUZZED!";
+        status.textContent = "You got in first! Answer now.";
+        navigator.vibrate?.([100, 50, 100]);
       } else {
-        btn.classList.remove(
-          "winner"
-        );
-        if (woodBoard) {
-          woodBoard.classList.remove("buzzed");
-        }
-        btn.textContent =
-          "LOCKED OUT";
-        status.textContent =
-          "Other team buzzed first!";
+        btn.classList.remove("winner");
+        if (woodBoard) woodBoard.classList.remove("buzzed");
+        btn.textContent = "LOCKED OUT";
+        status.textContent = "Other team buzzed first!";
       }
     }
+
     // ============================================================
-    // HYBRID TRANSPORT: WebRTC primary + Firebase Realtime DB fallback
+    // ABLY REALTIME CONNECTION
     // ============================================================
-    let phonePeer = null;
-    let activeConn = null;
-    let peerReconnectTimer = null;
-    let isConnecting = false;
+    let ablyClient = null;
+    let roomChannel = null;
 
-    // ── Firebase fallback state ────────────────────────────────────
-    let _fbConnected = false;       // true once Firebase channel is open
-    let _fbUnsubs    = [];
-    let _fbHostStateSeq = 0;        // last processed seq — prevents re-processing same msg
+    function connectAbly() {
+      if (gameOver) return;
 
-    function waitForFirebase(cb) {
-        if (window._ffDb) { cb(); return; }
-        const iv = setInterval(() => { if (window._ffDb) { clearInterval(iv); cb(); } }, 50);
-    }
+      connLbl.textContent = "Connecting...";
+      connLbl.style.color = "#facc15";
+      status.textContent = "Connecting to host...";
 
-    // Register phone presence on Firebase + listen for host commands
-    function initFirebaseFallback() {
-        waitForFirebase(() => {
-            const { ref, set, onValue, onDisconnect } = window._ffFirebase;
-            const db = window._ffDb;
-            _fbUnsubs.forEach(u => u()); _fbUnsubs = [];
-            const rRef = path => ref(db, `rooms/${room}/${path}`);
-
-            // Announce presence
-            set(rRef(`phones/${team}/connected`), true);
-            set(rRef(`phones/${team}/name`), name);
-            onDisconnect(rRef(`phones/${team}/connected`)).set(false);
-
-            // Listen for host commands
-            const hu = onValue(rRef("hostState"), snap => {
-                const msg = snap.val();
-                if (!msg || !msg.seq || msg.seq <= _fbHostStateSeq) return;
-
-                // Ignore messages older than 30 seconds — stale data from previous session
-                if (Date.now() - msg.seq > 30000) {
-                    console.log("[Firebase] Ignoring stale hostState message:", msg.type, "age:", Date.now() - msg.seq, "ms");
-                    return;
-                }
-
-                _fbHostStateSeq = msg.seq;
-
-                // Only use Firebase path if WebRTC is NOT already connected
-                if (activeConn && activeConn.open) return;
-
-                console.log("[Firebase] Received from host:", msg);
-                _fbConnected = true;
-
-                if (!activeConn) {
-                    // Firebase is our channel — update connection UI
-                    connLbl.textContent = "CONNECTED (relay)";
-                    connLbl.style.color = "#4ade80";
-                    status.textContent = "Connected via relay. Waiting for face-off...";
-                    isConnecting = false;
-                }
-                handleIncomingMessage(msg);
-            });
-            _fbUnsubs.push(hu);
-
-            // Watch if host goes offline
-            const ou = onValue(rRef("hostOnline"), snap => {
-                if (snap.val() === false && !activeConn?.open) {
-                    connLbl.textContent = "DISCONNECTED";
-                    connLbl.style.color = "#f87171";
-                    status.textContent = "Host disconnected. Reconnecting...";
-                    scheduleReconnect();
-                }
-            });
-            _fbUnsubs.push(ou);
-
-            console.log("[Firebase Fallback] Phone registered for room:", room, "team:", team);
-        });
-    }
-
-    // Send buzz via Firebase (fallback channel)
-    function buzzViaFirebase() {
-        waitForFirebase(() => {
-            const { ref, set } = window._ffFirebase;
-            set(ref(window._ffDb, `rooms/${room}/buzz`), {
-                team: team,
-                seq: Date.now()
-            });
-        });
-    }
-
-    function handleIncomingMessage(raw) {
-      let msg = raw;
-      if (typeof raw === "string") {
-        try {
-          msg = JSON.parse(raw);
-        } catch (e) {
-          console.warn("Incoming message parse warning:", raw);
-          return;
+      try {
+        if (ablyClient) {
+          ablyClient.close();
         }
-      }
-      if (!msg || typeof msg !== "object") return;
-      console.log("[Phone Received Message]:", msg);
+      } catch (e) {}
 
-      if (msg.type === "ARM") {
+      const clientId = `phone-${room}-t${team}-${deviceId.slice(0, 8)}`;
+      ablyClient = new Ably.Realtime({
+        key: ABLY_KEY,
+        clientId: clientId,
+        echoMessages: false
+      });
+
+      const channelName = `feud-${room}`;
+      roomChannel = ablyClient.channels.get(channelName);
+
+      ablyClient.connection.on("connected", () => {
+        console.log("[Ably Phone] Connected to Ably Realtime!");
+        connLbl.textContent = "CONNECTED";
+        connLbl.style.color = "#4ade80";
+        status.textContent = "Connected! Waiting for host...";
+
+        // Announce join to host
+        roomChannel.publish("phone_join", {
+          team: team,
+          name: name,
+          deviceId: deviceId
+        });
+
+        // Register in Presence
+        roomChannel.presence.enter({
+          role: "phone",
+          team: team,
+          name: name,
+          deviceId: deviceId
+        }).catch(err => console.warn("Presence enter:", err));
+      });
+
+      ablyClient.connection.on("connecting", () => {
+        connLbl.textContent = "Connecting...";
+        connLbl.style.color = "#facc15";
+        status.textContent = "Connecting to host...";
+      });
+
+      ablyClient.connection.on("disconnected", () => {
+        connLbl.textContent = "Reconnecting...";
+        connLbl.style.color = "#f87171";
+        status.textContent = "Reconnecting to host...";
+      });
+
+      ablyClient.connection.on("suspended", () => {
+        connLbl.textContent = "Reconnecting...";
+        connLbl.style.color = "#f87171";
+        status.textContent = "Connection suspended, retrying...";
+      });
+
+      ablyClient.connection.on("failed", (err) => {
+        console.error("[Ably Phone Error]:", err);
+        connLbl.textContent = "FAILED";
+        connLbl.style.color = "#f87171";
+        status.textContent = "Connection failed. Please refresh.";
+      });
+
+      // Host ACK on join
+      roomChannel.subscribe("phone_ack", (msg) => {
+        const data = msg.data;
+        if (data && Number(data.team) === team) {
+          console.log("[Ably Phone] Received phone_ack:", data);
+          connLbl.textContent = "CONNECTED";
+          connLbl.style.color = "#4ade80";
+          if (data.armed) {
+            setArmed();
+          } else {
+            setStandby("Connected & Ready! Waiting for face-off...");
+          }
+        }
+      });
+
+      // Host ARM buzzers
+      roomChannel.subscribe("arm", (msg) => {
+        console.log("[Ably Phone] Received ARM");
         setArmed();
-      } else if (msg.type === "LOCK") {
-        setLocked(msg.winnerTeam);
-      } else if (msg.type === "RESET") {
+      });
+
+      // Host LOCK buzzers
+      roomChannel.subscribe("lock", (msg) => {
+        console.log("[Ably Phone] Received LOCK:", msg.data);
+        setLocked(msg.data?.winnerTeam);
+      });
+
+      // Host RESET buzzers
+      roomChannel.subscribe("reset", (msg) => {
+        console.log("[Ably Phone] Received RESET");
         setStandby("Waiting for next face-off...");
-      } else if (msg.type === "GAME_OVER") {
+      });
+
+      // Host GAME OVER
+      roomChannel.subscribe("game_over", (msg) => {
+        console.log("[Ably Phone] Received GAME_OVER");
         setGameOver();
-      } else if (msg.type === "PHONE_REGISTERED") {
-        status.textContent = "Connected & Ready!";
-      }
+      });
     }
 
+    // ============================================================
+    // BUZZ FUNCTION
+    // ============================================================
     function buzz() {
       if (!phoneArmed || phoneBuzzed || gameOver) return;
-      const isDcOpen = activeConn?.dataChannel?.readyState === "open";
-      const isWebRtcOpen = activeConn && (activeConn.open || isDcOpen);
-      // Block buzz only if BOTH WebRTC AND Firebase are unavailable
-      if (!isWebRtcOpen && !_fbConnected) {
-        console.warn("[Buzz Ignored] No connection available yet.");
+      if (!roomChannel || ablyClient?.connection?.state !== "connected") {
+        console.warn("[Buzz Ignored] Not connected yet.");
         status.textContent = "Connecting to host...";
         return;
       }
@@ -684,52 +539,24 @@
       navigator.vibrate?.([80]);
 
       const payload = {
-        type: "BUZZ",
         team: team,
         timestamp: Date.now()
       };
-
       console.log("[Phone Buzzing!] Sending payload:", payload);
 
-      let sent = false;
-      if (isWebRtcOpen && activeConn.open) {
-        try {
-          activeConn.send(payload);
-          sent = true;
-        } catch (err) {
-          console.warn("PeerJS conn.send failed, attempting fallback:", err);
+      roomChannel.publish("buzz", payload, (err) => {
+        if (err) {
+          console.error("Buzz publish error:", err);
+          phoneBuzzed = false;
+          phoneArmed = true;
+          btn.disabled = false;
+          if (woodBoard) woodBoard.classList.remove("buzzed");
+          status.textContent = "Buzz send failed. Try again!";
         }
-      }
-
-      if (!sent && isWebRtcOpen && activeConn.dataChannel && activeConn.dataChannel.readyState === "open") {
-        try {
-          activeConn.dataChannel.send(JSON.stringify(payload));
-          sent = true;
-        } catch (err2) {
-          console.error("Direct dataChannel send also failed:", err2);
-        }
-      }
-
-      // Firebase fallback: if WebRTC failed or isn't open, send via Firebase
-      if (!sent && _fbConnected) {
-        try {
-          buzzViaFirebase();
-          sent = true;
-          console.log("[Buzz via Firebase fallback]");
-        } catch (fbErr) {
-          console.error("Firebase buzz also failed:", fbErr);
-        }
-      }
-
-      if (!sent) {
-        phoneBuzzed = false;
-        phoneArmed = true;
-        btn.disabled = false;
-        if (woodBoard) woodBoard.classList.remove("buzzed");
-        status.textContent = "Buzz send failed. Try again!";
-      }
+      });
     }
 
+    // Button event listeners
     btn.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       buzz();
@@ -743,239 +570,45 @@
       buzz();
     });
 
-    function connectPeer() {
-      if (gameOver) return;
-      if (activeConn && activeConn.open) return;
-      if (isConnecting) return;
-      isConnecting = true;
-      // Always keep Firebase fallback running in parallel
-      initFirebaseFallback();
-
-      if (peerReconnectTimer) {
-        clearTimeout(peerReconnectTimer);
-        peerReconnectTimer = null;
-      }
-
-      connLbl.textContent = "Connecting...";
-      connLbl.style.color = "#facc15";
-
-      if (!phonePeer || phonePeer.destroyed) {
-        phonePeer = new Peer({
-          debug: 1,
-          config: {
-            iceServers: [
-              { urls: "stun:stun.l.google.com:19302" },
-              { urls: "stun:stun.cloudflare.com:3478" },
-              {
-                urls: [
-                  "turn:openrelay.metered.ca:80",
-                  "turn:openrelay.metered.ca:80?transport=tcp",
-                  "turn:openrelay.metered.ca:443",
-                  "turn:openrelay.metered.ca:443?transport=tcp",
-                  "turns:openrelay.metered.ca:443?transport=tcp"
-                ],
-                username: "openrelayproject",
-                credential: "openrelayproject"
-              }
-            ],
-            iceCandidatePoolSize: 2
+    // ============================================================
+    // LIFECYCLE LISTENERS
+    // ============================================================
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (!teamRejected && !gameOver) {
+          if (ablyClient?.connection?.state !== "connected") {
+            connectAbly();
+          } else if (roomChannel) {
+            roomChannel.publish("phone_join", { team, name, deviceId });
           }
-        });
-
-        phonePeer.on("open", (myId) => {
-          doConnectToHost();
-        });
-
-        phonePeer.on("error", (err) => {
-          console.error("PeerJS Phone Error:", err);
-          isConnecting = false;
-          status.textContent = "Connecting to game host...";
-          connLbl.textContent = "Reconnecting...";
-          connLbl.style.color = "#f87171";
-          scheduleReconnect();
-        });
-      } else if (phonePeer.open) {
-        doConnectToHost();
+        }
+        if ("wakeLock" in navigator) {
+          navigator.wakeLock.request("screen").catch(() => {});
+        }
       }
+    });
 
-      function doConnectToHost() {
-        if (!room) {
-          isConnecting = false;
-          status.textContent = "No room code specified in link!";
-          return;
-        }
-
-        const hostPeerId = `ff-host-${room}`;
-        console.log("[PeerJS Phone] Connecting to host:", hostPeerId);
-        status.textContent = "Contacting game host...";
-
-        const conn = phonePeer.connect(hostPeerId, {
-          serialization: "json",
-          metadata: {
-            team: team,
-            name: name,
-            deviceId: deviceId
-          }
-        });
-
-        let opened = false;
-        let iceRestartTimer = null;
-        const handleOpen = () => {
-          if (opened) return;
-          opened = true;
-          if (iceRestartTimer) {
-            clearTimeout(iceRestartTimer);
-            iceRestartTimer = null;
-          }
-          console.log("[DataChannel Open] Connected to host!");
-          isConnecting = false;
-          activeConn = conn;
-          conn._open = true;
-          connLbl.textContent = "CONNECTED";
-          connLbl.style.color = "#4ade80";
-          status.textContent = "Connected to host! Waiting for face-off...";
-          setStandby("Connected to host! Waiting for face-off...");
-        };
-
-        if (conn.open || conn.dataChannel?.readyState === "open") {
-          handleOpen();
-        } else {
-          conn.on("open", handleOpen);
-        }
-
-        if (conn.dataChannel) {
-          conn.dataChannel.addEventListener("open", () => {
-            conn._open = true;
-            handleOpen();
-          });
-          conn.dataChannel.addEventListener("message", (evt) => {
-            handleIncomingMessage(evt.data);
-          });
-        }
-
-        if (conn.peerConnection) {
-          conn.peerConnection.addEventListener("iceconnectionstatechange", () => {
-            const state = conn.peerConnection.iceConnectionState;
-            console.log("[Phone ICE State]:", state);
-            if (state === "checking") {
-              if (!opened) status.textContent = "Pairing with host screen...";
-            } else if (state === "connected" || state === "completed") {
-              if (iceRestartTimer) {
-                clearTimeout(iceRestartTimer);
-                iceRestartTimer = null;
-              }
-              if (conn.open || conn.dataChannel?.readyState === "open") {
-                handleOpen();
-              }
-            } else if (state === "disconnected") {
-              if (iceRestartTimer) clearTimeout(iceRestartTimer);
-              iceRestartTimer = setTimeout(() => {
-                if (!opened && conn.peerConnection && conn.peerConnection.iceConnectionState === "disconnected") {
-                  console.log("[Phone ICE Disconnected] Attempting client ICE restart...");
-                  if (typeof conn.peerConnection.restartIce === "function") {
-                    conn.peerConnection.restartIce();
-                  }
-                }
-              }, 3000);
-            } else if (state === "failed") {
-              if (iceRestartTimer) clearTimeout(iceRestartTimer);
-              status.textContent = "Connection issue. Retrying...";
-              try { conn.close(); } catch(e) {}
-            }
-          });
-        }
-
-        conn.on("data", (data) => {
-          handleIncomingMessage(data);
-        });
-
-        conn.on("close", () => {
-          console.log("[Phone Disconnected from Host]");
-          isConnecting = false;
-          activeConn = null;
-          connLbl.textContent = "DISCONNECTED";
-          connLbl.style.color = "#f87171";
-          status.textContent = "Disconnected from host. Reconnecting...";
-          scheduleReconnect();
-        });
-
-        conn.on("error", (err) => {
-          console.error("Connection error:", err);
-          isConnecting = false;
-          activeConn = null;
-          scheduleReconnect();
-        });
+    window.addEventListener("pageshow", () => {
+      if (!teamRejected && !gameOver && ablyClient?.connection?.state !== "connected") {
+        connectAbly();
       }
+    });
 
-      function scheduleReconnect() {
-        if (gameOver) return;
-        if (peerReconnectTimer) clearTimeout(peerReconnectTimer);
-        peerReconnectTimer = setTimeout(() => {
-          connectPeer();
-        }, 2500);
+    window.addEventListener("online", () => {
+      if (!teamRejected && !gameOver && ablyClient?.connection?.state !== "connected") {
+        connectAbly();
       }
+    });
+
+    if ("wakeLock" in navigator) {
+      navigator.wakeLock.request("screen").catch(() => {});
     }
 
-    // ============================================================
-    // PAGE VISIBILITY
-    // ============================================================
-    document.addEventListener(
-      "visibilitychange",
-      () => {
-        if (
-          document.visibilityState ===
-          "visible"
-        ) {
-          if (!teamRejected && !gameOver) {
-            connectPeer();
-          }
-          if (
-            "wakeLock" in navigator
-          ) {
-            navigator.wakeLock
-              .request("screen")
-              .catch(() => { });
-          }
-        }
-      }
-    );
-    // ============================================================
-    // PAGE SHOW
-    // ============================================================
-    window.addEventListener(
-      "pageshow",
-      () => {
-        if (!teamRejected && !gameOver) {
-          connectPeer();
-        }
-      }
-    );
-    // ============================================================
-    // NETWORK ONLINE
-    // ============================================================
-    window.addEventListener(
-      "online",
-      () => {
-        if (!teamRejected && !gameOver) {
-          connectPeer();
-        }
-      }
-    );
-    // ============================================================
-    // WAKE LOCK
-    // ============================================================
-    if (
-      "wakeLock" in navigator
-    ) {
-      navigator.wakeLock
-        .request("screen")
-        .catch(() => { });
-    }
     // ============================================================
     // START
     // ============================================================
     setStandby();
-    connectPeer();
+    connectAbly();
   </script>
 </body>
 

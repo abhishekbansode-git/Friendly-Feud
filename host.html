@@ -7,26 +7,7 @@
     <title>Friendly Feud Host</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔔</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <!-- Firebase SDK (fallback relay for same-network / ICE-fail scenarios) -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-      import { getDatabase, ref, set, onValue, remove, onDisconnect }
-        from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
-      const firebaseConfig = {
-        apiKey: "AIzaSyBhngPbopH7sLfZ3wH7kEZR290D9qSocQw",
-        authDomain: "friendly-feud-f45b2.firebaseapp.com",
-        databaseURL: "https://friendly-feud-f45b2-default-rtdb.firebaseio.com",
-        projectId: "friendly-feud-f45b2",
-        storageBucket: "friendly-feud-f45b2.firebasestorage.app",
-        messagingSenderId: "822642189799",
-        appId: "1:822642189799:web:453b5f4beed47584db8942"
-      };
-      const fbApp = initializeApp(firebaseConfig);
-      const fbDb  = getDatabase(fbApp);
-      window._ffDb       = fbDb;
-      window._ffFirebase = { ref, set, onValue, remove, onDisconnect };
-    </script>
+    <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -5602,297 +5583,177 @@
             };
         });
         /* ============================================================
-   HYBRID TRANSPORT: WebRTC primary + Firebase Realtime DB fallback
-   - PeerJS/WebRTC is tried first (zero latency on working networks)
-   - Firebase auto-activates if ICE fails (e.g. same WiFi scenario)
+   ABLY REALTIME - ULTRA LOW LATENCY, ZERO CONFIG, 100% RELIABLE
    ============================================================ */
+        const ABLY_KEY = "2si6sA.z6skSQ:20dS9MQwEoR2E70VHWSnePpXyMQuZgKlCRwFdnuyDms";
         let roomCode = sessionStorage.getItem("feud_host_room") || Math.random().toString(36).substring(2, 6).toUpperCase();
         sessionStorage.setItem("feud_host_room", roomCode);
-        let hostPeer = null;
-        let hostPeerStarting = false;
+
+        let ablyClient = null;
+        let roomChannel = null;
+
         const peers = {
-            0: { conn: null, connected: false, name: "Team 1" },
-            1: { conn: null, connected: false, name: "Team 2" }
+            0: { connected: false, name: "Team 1", deviceId: null },
+            1: { connected: false, name: "Team 2", deviceId: null }
         };
         let buzzersArmed = false;
         let buzzerToastTimer = null;
         let winningTeam = null;
         let buzzersEverConnected = false;
 
-        // ── Firebase fallback helpers ──────────────────────────────────
-        let _fbUnsubs = [];
-        let _fbBuzzSeenSeqs = new Set(); // dedup buzz events
-
-        function waitForFirebase(cb) {
-            if (window._ffDb) { cb(); return; }
-            const iv = setInterval(() => { if (window._ffDb) { clearInterval(iv); cb(); } }, 50);
-        }
-
-        function sendViaFirebase(message) {
-            waitForFirebase(() => {
-                const { ref, set } = window._ffFirebase;
-                set(ref(window._ffDb, `rooms/${roomCode}/hostState`), {
-                    ...message, seq: Date.now()
-                });
-            });
-        }
-
-        function initFirebaseFallback() {
-            waitForFirebase(() => {
-                const { ref, set, onValue, remove, onDisconnect } = window._ffFirebase;
-                const db = window._ffDb;
-                _fbUnsubs.forEach(u => u()); _fbUnsubs = [];
-                const rRef = path => ref(db, `rooms/${roomCode}/${path}`);
-
-                // Clear any stale data from previous sessions, announce STANDBY
-                set(rRef("hostState"), { type: "STANDBY", seq: Date.now() });
-                set(rRef("buzz"), null);
-                set(rRef("hostOnline"), true);
-                onDisconnect(rRef("hostOnline")).set(false);
-                // When host tab closes, Firebase will write GAME_OVER automatically
-                onDisconnect(rRef("hostState")).set({ type: "GAME_OVER", seq: 9999999999999 });
-
-                // Watch phone presence
-                for (const team of [0, 1]) {
-                    const u = onValue(rRef(`phones/${team}/connected`), snap => {
-                        const online = snap.val() === true;
-                        if (online && !peers[team].connected) {
-                            peers[team].connected = true;
-                            buzzersEverConnected = true;
-                            console.log(`[Firebase] Team ${team} connected via fallback`);
-                            updateWebRTCLobbyState();
-                            set(rRef("hostState"), { type: "PHONE_REGISTERED", team, seq: Date.now() });
-                            if (buzzersArmed)
-                                setTimeout(() => set(rRef("hostState"), { type: "ARM", seq: Date.now() }), 200);
-                        } else if (!online && !peers[team].conn?.open) {
-                            peers[team].connected = false;
-                            updateWebRTCLobbyState();
-                        }
-                    });
-                    _fbUnsubs.push(u);
-                }
-
-                // Watch for buzz events
-                const bu = onValue(rRef("buzz"), snap => {
-                    const data = snap.val();
-                    if (!data || !data.seq) return;
-                    if (_fbBuzzSeenSeqs.has(data.seq)) return; // dedup
-                    _fbBuzzSeenSeqs.add(data.seq);
-                    if (_fbBuzzSeenSeqs.size > 50) _fbBuzzSeenSeqs.clear(); // prevent unbounded growth
-                    remove(rRef("buzz"));
-                    const team = Number(data.team);
-                    if (team === 0 || team === 1) {
-                        console.log(`[Firebase] Buzz from team ${team}`);
-                        handleTeamBuzz(team);
-                    }
-                });
-                _fbUnsubs.push(bu);
-                console.log("[Firebase Fallback] Active for room:", roomCode);
-            });
-        }
-
-        function initHostPeer() {
-            if (hostPeer && !hostPeer.destroyed && hostPeer.open) {
+        function initHostAbly() {
+            if (ablyClient && ablyClient.connection && ablyClient.connection.state === "connected") {
                 return;
             }
-            if (hostPeerStarting) return;
-            hostPeerStarting = true;
-
             try {
-                if (hostPeer) hostPeer.destroy();
+                if (ablyClient) ablyClient.close();
             } catch (e) {}
 
-            const peerId = `ff-host-${roomCode}`;
-            console.log("[PeerJS Host] Initializing with ID:", peerId);
+            const channelName = `feud-${roomCode}`;
+            console.log("[Ably Host] Connecting to channel:", channelName);
 
-            hostPeer = new Peer(peerId, {
-                debug: 1,
-                config: {
-                    iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        { urls: "stun:stun.cloudflare.com:3478" },
-                        {
-                            urls: [
-                                "turn:openrelay.metered.ca:80",
-                                "turn:openrelay.metered.ca:80?transport=tcp",
-                                "turn:openrelay.metered.ca:443",
-                                "turn:openrelay.metered.ca:443?transport=tcp",
-                                "turns:openrelay.metered.ca:443?transport=tcp"
-                            ],
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        }
-                    ],
-                    iceCandidatePoolSize: 2
-                }
+            ablyClient = new Ably.Realtime({
+                key: ABLY_KEY,
+                clientId: `host-${roomCode}`,
+                echoMessages: false
             });
 
-            hostPeer.on("open", (id) => {
-                hostPeerStarting = false;
-                console.log("[PeerJS Host Ready] ID:", id);
-            });
+            roomChannel = ablyClient.channels.get(channelName);
 
-            hostPeer.on("connection", (conn) => {
-                const team = Number(conn.metadata?.team ?? 0);
-                const teamName = conn.metadata?.name || `Team ${team + 1}`;
-                console.log(`[Phone Connected] Team ${team} (${teamName})`);
+            ablyClient.connection.on("connected", () => {
+                console.log("[Ably Host Ready] Connected to Ably Realtime!");
+                // Host enters presence
+                roomChannel.presence.enter({ role: "host", room: roomCode }).catch(err => console.warn("Host presence enter:", err));
 
-                if (peers[team].conn && peers[team].conn !== conn) {
-                    try { peers[team].conn.close(); } catch(e) {}
-                }
-                peers[team].conn = conn;
-                peers[team].name = teamName;
-
-                let readyTriggered = false;
-                const markTeamReady = () => {
-                    if (readyTriggered) return;
-                    readyTriggered = true;
-                    conn._open = true;
-                    console.log(`[Buzzer Connected & Ready] Team ${team} (${teamName})!`);
-                    peers[team].connected = true;
-                    buzzersEverConnected = true;
-                    updateWebRTCLobbyState();
-                    // Send phone registration confirmation
-                    sendToTeam(team, { type: "PHONE_REGISTERED", team: team, name: teamName });
-                    if (buzzersArmed) {
-                        sendToTeam(team, { type: "ARM" });
-                    }
-                };
-
-                // Trigger ready when channel opens or ICE finishes
-                if (conn.open || conn.dataChannel?.readyState === "open") {
-                    markTeamReady();
-                } else {
-                    conn.on("open", markTeamReady);
-                }
-
-                if (conn.dataChannel) {
-                    conn.dataChannel.addEventListener("open", () => {
-                        conn._open = true;
-                        markTeamReady();
-                    });
-                    conn.dataChannel.addEventListener("message", (evt) => {
-                        handleBuzzerMessage(team, evt.data);
-                    });
-                }
-
-                if (conn.peerConnection) {
-                    conn.peerConnection.addEventListener("iceconnectionstatechange", () => {
-                        const state = conn.peerConnection.iceConnectionState;
-                        console.log(`[ICE Team ${team}]:`, state);
-                        if (state === "connected" || state === "completed") {
-                            if (conn.open || conn.dataChannel?.readyState === "open") {
-                                markTeamReady();
+                // Check active presence in case host refreshed during game
+                roomChannel.presence.get((err, members) => {
+                    if (!err && members) {
+                        members.forEach(m => {
+                            if (m.data && m.data.role === "phone" && (m.data.team === 0 || m.data.team === 1)) {
+                                handlePhoneJoin(m.data);
                             }
-                        } else if (state === "disconnected") {
-                            console.log(`[ICE Team ${team}]: disconnected, awaiting client recovery...`);
-                        }
-                    });
-                }
-
-                conn.on("data", (data) => {
-                    handleBuzzerMessage(team, data);
-                });
-
-                conn.on("close", () => {
-                    console.log(`[Phone Disconnected] Team ${team}`);
-                    peers[team].connected = false;
-                    updateWebRTCLobbyState();
-                });
-
-                conn.on("error", (err) => {
-                    console.warn(`[Team ${team} Non-fatal Notice]:`, err?.message || err);
+                        });
+                    }
                 });
             });
 
-            hostPeer.on("error", (err) => {
-                hostPeerStarting = false;
-                console.error("[PeerJS Host Error]:", err);
-                if (err.type === "unavailable-id") {
-                    roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-                    initHostPeer();
+            ablyClient.connection.on("disconnected", () => {
+                console.warn("[Ably Host] Disconnected from Ably, reconnecting...");
+            });
+
+            ablyClient.connection.on("failed", (err) => {
+                console.error("[Ably Host] Connection failed:", err);
+            });
+
+            // Listen for phone direct join announcements
+            roomChannel.subscribe("phone_join", (msg) => {
+                const data = msg.data;
+                if (data && (data.team === 0 || data.team === 1)) {
+                    handlePhoneJoin(data);
                 }
             });
+
+            // Listen for phone presence events
+            roomChannel.presence.subscribe(["enter", "update"], (pMsg) => {
+                if (pMsg.data && pMsg.data.role === "phone" && (pMsg.data.team === 0 || pMsg.data.team === 1)) {
+                    handlePhoneJoin(pMsg.data);
+                }
+            });
+
+            roomChannel.presence.subscribe("leave", (pMsg) => {
+                if (pMsg.data && pMsg.data.role === "phone") {
+                    const team = Number(pMsg.data.team);
+                    if (team === 0 || team === 1) {
+                        console.log(`[Ably Host] Phone left presence: Team ${team}`);
+                        roomChannel.presence.get((err, members) => {
+                            const stillPresent = !err && members && members.some(m => m.data && m.data.role === "phone" && Number(m.data.team) === team);
+                            if (!stillPresent) {
+                                peers[team].connected = false;
+                                updateWebRTCLobbyState();
+                            }
+                        });
+                    }
+                }
+            });
+
+            // Listen for buzzer buzzes
+            roomChannel.subscribe("buzz", (msg) => {
+                const data = msg.data;
+                if (data && (data.team === 0 || data.team === 1)) {
+                    handleBuzzerMessage(Number(data.team), data);
+                }
+            });
+        }
+
+        function handlePhoneJoin(data) {
+            const team = Number(data.team);
+            const teamName = team === 0
+                ? (document.getElementById("team1-input")?.value?.trim() || data.name || "TEAM 1")
+                : (document.getElementById("team2-input")?.value?.trim() || data.name || "TEAM 2");
+
+            console.log(`[Ably Host] Phone Registered: Team ${team} (${teamName})`);
+            peers[team].connected = true;
+            peers[team].name = teamName;
+            peers[team].deviceId = data.deviceId;
+            buzzersEverConnected = true;
+            updateWebRTCLobbyState();
+
+            // Send acknowledgment back so phone knows it is connected
+            if (roomChannel) {
+                roomChannel.publish("phone_ack", {
+                    team: team,
+                    name: teamName,
+                    armed: buzzersArmed
+                });
+            }
         }
 
         function sendToTeam(team, message) {
-            const conn = peers[team]?.conn;
-            if (conn) {
-                if (!conn.open && conn.dataChannel?.readyState === "open") {
-                    conn._open = true;
-                }
-                const serialized = typeof message === "string" ? message : JSON.stringify(message);
-                if (conn.open) {
-                    try {
-                        conn.send(message);
-                    } catch (e) {
-                        console.warn("sendToTeam conn.send fallback:", e);
-                        if (conn.dataChannel && conn.dataChannel.readyState === "open") {
-                            try { conn.dataChannel.send(serialized); } catch(e2) {}
-                        }
-                    }
-                } else if (conn.dataChannel && conn.dataChannel.readyState === "open") {
-                    try { conn.dataChannel.send(serialized); } catch(e2) {}
-                }
+            if (roomChannel) {
+                const eventName = message.type ? message.type.toLowerCase() : "message";
+                roomChannel.publish(eventName, Object.assign({}, message, { targetTeam: team }));
             }
         }
 
         function sendToBothTeams(message) {
-            sendToTeam(0, message);
-            sendToTeam(1, message);
-            // Mirror to Firebase so phones on fallback channel also receive
-            sendViaFirebase(message);
+            if (roomChannel) {
+                const eventName = message.type ? message.type.toLowerCase() : "message";
+                roomChannel.publish(eventName, message);
+            }
         }
 
         function notifyGameOverAndCloseConnections() {
-            sendToBothTeams({ type: "GAME_OVER" });
+            if (roomChannel) {
+                roomChannel.publish("game_over", { type: "GAME_OVER", timestamp: Date.now() });
+            }
             setTimeout(() => {
-                for (const t of [0, 1]) {
-                    try {
-                        if (peers[t]?.conn) peers[t].conn.close();
-                    } catch (e) {}
-                    if (peers[t]) peers[t].connected = false;
-                }
+                peers[0].connected = false;
+                peers[1].connected = false;
                 updateWebRTCLobbyState();
             }, 300);
         }
 
-        function handleBuzzerMessage(
-            team,
-            rawMessage
-        ) {
+        function handleBuzzerMessage(team, rawMessage) {
             try {
-                const msg =
-                    typeof rawMessage === "string"
-                        ? JSON.parse(rawMessage)
-                        : rawMessage;
+                const msg = typeof rawMessage === "string" ? JSON.parse(rawMessage) : rawMessage;
                 console.log(`[Host Received Message] from Team ${team}:`, msg);
-                if (msg && msg.type === "BUZZ") {
-                    handleTeamBuzz(team);
-                }
+                handleTeamBuzz(team);
             } catch (error) {
-                console.error("handleBuzzerMessage parse error:", error);
+                console.error("handleBuzzerMessage error:", error);
             }
         }
+
         /* ------------------------------------------------------------
            HOST AUTHORITATIVE BUZZER
            ------------------------------------------------------------ */
         function handleTeamBuzz(team) {
-            /*
-             * If buzzers are not armed, ignore.
-             */
-            if (!buzzersArmed) {
-                return;
-            }
-            /*
-             * First buzz wins.
-             */
-            if (winningTeam !== null) {
-                return;
-            }
+            if (!buzzersArmed) return;
+            if (winningTeam !== null) return;
+
             winningTeam = team;
             buzzersArmed = false;
             playTeamBuzzer();
+
             const lbl1 = document.getElementById("label-team1");
             const lbl2 = document.getElementById("label-team2");
             if (lbl1 && lbl2) {
@@ -5904,65 +5765,40 @@
                     lbl1.classList.remove("buzzered");
                 }
             }
-            /*
-             * Lock both phones immediately.
-             */
-            sendToBothTeams({
-                type: "LOCK",
-                winnerTeam: team
-            });
-            /*
-             * Existing host UI notification.
-             */
-            const teamName =
-                team === 0
-                    ? (
-                        document
-                            .getElementById("team1-input")
-                            .value
-                            .trim()
-                        || "TEAM 1"
-                    )
-                    : (
-                        document
-                            .getElementById("team2-input")
-                            .value
-                            .trim()
-                        || "TEAM 2"
-                    );
-            const toast =
-                document.getElementById(
-                    "buzzer-toast"
-                );
-            const msgEl =
-                document.getElementById(
-                    "buzzer-toast-msg"
-                );
+
+            // Lock both phones immediately via Ably
+            if (roomChannel) {
+                roomChannel.publish("lock", {
+                    type: "LOCK",
+                    winnerTeam: team,
+                    timestamp: Date.now()
+                });
+            }
+
+            const teamName = team === 0
+                ? (document.getElementById("team1-input")?.value?.trim() || "TEAM 1")
+                : (document.getElementById("team2-input")?.value?.trim() || "TEAM 2");
+
+            const toast = document.getElementById("buzzer-toast");
+            const msgEl = document.getElementById("buzzer-toast-msg");
             if (msgEl) {
-                msgEl.textContent =
-                    `${teamName.toUpperCase()} BUZZED FIRST!`;
+                msgEl.textContent = `${teamName.toUpperCase()} BUZZED FIRST!`;
             }
             if (buzzerToastTimer) {
                 clearTimeout(buzzerToastTimer);
                 buzzerToastTimer = null;
             }
             if (toast) {
-                toast.style.background =
-                    "#16a34a";
-                toast.style.color =
-                    "#ffffff";
-                toast.style.border =
-                    "2px solid rgb(255, 197, 0)";
-                toast.classList.remove(
-                    "hidden"
-                );
+                toast.style.background = "#16a34a";
+                toast.style.color = "#ffffff";
+                toast.style.border = "2px solid rgb(255, 197, 0)";
+                toast.classList.remove("hidden");
                 buzzerToastTimer = setTimeout(() => {
-                    toast.classList.add(
-                        "hidden"
-                    );
+                    toast.classList.add("hidden");
                 }, 10000);
             }
         }
+
         /* ------------------------------------------------------------
            ARM BUZZERS
            ------------------------------------------------------------ */
@@ -5971,46 +5807,35 @@
             clearTeamBuzzVisuals();
             winningTeam = null;
             buzzersArmed = true;
-            // Check if any phones are actually connected
-            const anyPhoneConnected =
-                peers[0].connected ||
-                peers[1].connected;
-            sendToBothTeams({
-                type: "ARM"
-            });
-            /*
-             * Show host confirmation only if at least one phone is connected.
-             * If the user skipped buzzer setup, don't show the toast.
-             */
+
+            const anyPhoneConnected = peers[0].connected || peers[1].connected;
+
+            if (roomChannel) {
+                roomChannel.publish("arm", {
+                    type: "ARM",
+                    timestamp: Date.now()
+                });
+            }
+
             if (!anyPhoneConnected) return;
-            const toast =
-                document.getElementById(
-                    "buzzer-toast"
-                );
-            const msgEl =
-                document.getElementById(
-                    "buzzer-toast-msg"
-                );
+
+            const toast = document.getElementById("buzzer-toast");
+            const msgEl = document.getElementById("buzzer-toast-msg");
             if (msgEl) {
-                msgEl.textContent =
-                    "BUZZERS READY!";
+                msgEl.textContent = "BUZZERS READY!";
             }
             if (buzzerToastTimer) {
                 clearTimeout(buzzerToastTimer);
                 buzzerToastTimer = null;
             }
             if (toast) {
-                toast.style.background =
-                    "#dc2626";
-                toast.style.color =
-                    "#ffffff";
-                toast.style.border =
-                    "2px solid rgb(255, 197, 0)";
-                toast.classList.remove(
-                    "hidden"
-                );
+                toast.style.background = "#dc2626";
+                toast.style.color = "#ffffff";
+                toast.style.border = "2px solid rgb(255, 197, 0)";
+                toast.classList.remove("hidden");
             }
         }
+
         /* ------------------------------------------------------------
            RESET BUZZERS
            ------------------------------------------------------------ */
@@ -6018,70 +5843,46 @@
             clearTeamBuzzVisuals();
             buzzersArmed = false;
             winningTeam = null;
-            /*
-             * RESET goes directly over WebRTC.
-             */
-            sendToBothTeams({
-                type: "RESET"
-            });
+
+            if (roomChannel) {
+                roomChannel.publish("reset", {
+                    type: "RESET",
+                    timestamp: Date.now()
+                });
+            }
+
             if (buzzerToastTimer) {
                 clearTimeout(buzzerToastTimer);
                 buzzerToastTimer = null;
             }
-            const toast =
-                document.getElementById(
-                    "buzzer-toast"
-                );
+            const toast = document.getElementById("buzzer-toast");
             if (toast) {
-                toast.classList.add(
-                    "hidden"
-                );
+                toast.classList.add("hidden");
             }
         }
+
         function clearTeamBuzzVisuals() {
             const lbl1 = document.getElementById("label-team1");
             const lbl2 = document.getElementById("label-team2");
-            if (lbl1) {
-                lbl1.classList.remove("buzzered");
-            }
-            if (lbl2) {
-                lbl2.classList.remove("buzzered");
-            }
+            if (lbl1) lbl1.classList.remove("buzzered");
+            if (lbl2) lbl2.classList.remove("buzzered");
         }
+
         /* ------------------------------------------------------------
            LOBBY STATUS
            ------------------------------------------------------------ */
         function updateWebRTCLobbyState() {
-            const t0 =
-                peers[0].connected;
-            const t1 =
-                peers[1].connected;
-            const st0 =
-                document.getElementById(
-                    "status-0"
-                );
-            const st1 =
-                document.getElementById(
-                    "status-1"
-                );
+            const t0 = peers[0].connected;
+            const t1 = peers[1].connected;
+
+            const st0 = document.getElementById("status-0");
+            const st1 = document.getElementById("status-1");
+
             if (st0) {
-                st0.className =
-                    "status-badge " +
-                    (t0
-                        ? "connected"
-                        : "waiting");
-                st0.textContent =
-                    t0
-                        ? "Connected"
-                        : "Waiting for phone...";
-                st0.style.background =
-                    t0
-                        ? "#22c55e"
-                        : "#f59e0b";
-                st0.style.color =
-                    t0
-                        ? "#fff"
-                        : "#000";
+                st0.className = "status-badge " + (t0 ? "connected" : "waiting");
+                st0.textContent = t0 ? "Connected" : "Waiting for phone...";
+                st0.style.background = t0 ? "#22c55e" : "#f59e0b";
+                st0.style.color = t0 ? "#fff" : "#000";
             }
             const panel0 = document.getElementById("panel-0");
             if (panel0) {
@@ -6116,24 +5917,12 @@
                     ? "0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(34,197,94,0.5)"
                     : "0 4px 20px rgba(0,0,0,0.5)";
             }
+
             if (st1) {
-                st1.className =
-                    "status-badge " +
-                    (t1
-                        ? "connected"
-                        : "waiting");
-                st1.textContent =
-                    t1
-                        ? "Connected"
-                        : "Waiting for phone...";
-                st1.style.background =
-                    t1
-                        ? "#22c55e"
-                        : "#f59e0b";
-                st1.style.color =
-                    t1
-                        ? "#fff"
-                        : "#000";
+                st1.className = "status-badge " + (t1 ? "connected" : "waiting");
+                st1.textContent = t1 ? "Connected" : "Waiting for phone...";
+                st1.style.background = t1 ? "#22c55e" : "#f59e0b";
+                st1.style.color = t1 ? "#fff" : "#000";
             }
             const panel1 = document.getElementById("panel-1");
             if (panel1) {
@@ -6168,33 +5957,28 @@
                     ? "0 4px 20px rgba(0,0,0,0.5), 0 0 20px rgba(34,197,94,0.5)"
                     : "0 4px 20px rgba(0,0,0,0.5)";
             }
+
             if (t0 && t1) {
                 buzzersEverConnected = true;
             }
             updateBuzzerConnectUI();
-            const playBtn =
-                document.getElementById(
-                    "start-game-btn"
-                );
-            if (!playBtn) {
-                return;
-            }
-            const count =
-                (t0 ? 1 : 0) +
-                (t1 ? 1 : 0);
+
+            const playBtn = document.getElementById("start-game-btn");
+            if (!playBtn) return;
+
+            const count = (t0 ? 1 : 0) + (t1 ? 1 : 0);
             const heading = document.getElementById("lobby-status-heading");
             const sub = document.getElementById("lobby-status-sub");
             const orDivider = document.getElementById("lobby-or-divider");
+
             if (count === 2) {
-                // START GAME: inverted — green bg, red border
                 playBtn.style.background = "linear-gradient(180deg, #16a34a, #15803d)";
                 playBtn.style.borderColor = "#dc2626";
                 playBtn.textContent = "START GAME";
                 if (heading) { heading.textContent = "BOTH PHONES CONNECTED!"; heading.style.color = "#16a34a"; }
-                if (sub) { sub.textContent = "Your buzzers are ready. Let\u2019s play!"; sub.style.color = "#16a34a"; }
+                if (sub) { sub.textContent = "Your buzzers are ready. Let’s play!"; sub.style.color = "#16a34a"; }
                 if (orDivider) orDivider.style.visibility = "hidden";
             } else if (count === 1) {
-                // SKIP: red bg, green border
                 playBtn.style.background = "linear-gradient(135deg, #d32f2f, #a21a1a)";
                 playBtn.style.borderColor = "#16a34a";
                 playBtn.textContent = "SKIP AND PLAY GAME";
@@ -6202,7 +5986,6 @@
                 if (sub) { sub.textContent = "One team still needs to connect their buzzer."; sub.style.color = "rgba(255,255,255,0.65)"; }
                 if (orDivider) orDivider.style.visibility = "visible";
             } else {
-                // SKIP: red bg, green border
                 playBtn.style.background = "linear-gradient(135deg, #d32f2f, #a21a1a)";
                 playBtn.style.borderColor = "#16a34a";
                 playBtn.textContent = "SKIP AND PLAY GAME";
@@ -6211,48 +5994,22 @@
                 if (orDivider) orDivider.style.visibility = "visible";
             }
         }
+
         /* ------------------------------------------------------------
            CREATE ROOM
            ------------------------------------------------------------ */
         function createRoom() {
-            const t1 =
-                document
-                    .getElementById("team1-input")
-                    .value
-                    .trim()
-                || "TEAM 1";
-            const t2 =
-                document
-                    .getElementById("team2-input")
-                    .value
-                    .trim()
-                || "TEAM 2";
-            showView(
-                "lobby-view"
-            );
+            const t1 = document.getElementById("team1-input").value.trim() || "TEAM 1";
+            const t2 = document.getElementById("team2-input").value.trim() || "TEAM 2";
+            showView("lobby-view");
             const _rcDisplay = document.getElementById("room-code-display");
             if (_rcDisplay) _rcDisplay.textContent = roomCode;
-            document
-                .getElementById(
-                    "t0-title"
-                )
-                .textContent =
-                t1;
-            document
-                .getElementById(
-                    "t1-title"
-                )
-                .textContent =
-                t2;
-            /*
-             * Start WebRTC (primary) + Firebase fallback simultaneously.
-             */
-            initHostPeer();
-            initFirebaseFallback();
-            /*
-             * QR code contains ONLY:
-             * room + team + phone page.
-             */
+            document.getElementById("t0-title").textContent = t1;
+            document.getElementById("t1-title").textContent = t2;
+
+            // Start Ably Realtime Room
+            initHostAbly();
+
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
             let basePhoneUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1) + 'phone.html';
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
@@ -6265,48 +6022,28 @@
             if (qr0) new QRCode(qr0, { text: team0Url, width: 560, height: 560 });
             if (qr1) new QRCode(qr1, { text: team1Url, width: 560, height: 560 });
         }
+
         /* ------------------------------------------------------------
            GAME
            ------------------------------------------------------------ */
         function enterGame() {
             startGameWithTeams();
         }
+
         /* ------------------------------------------------------------
            QR MODAL
            ------------------------------------------------------------ */
         function openQrModal() {
-            
-            const modal =
-                document.getElementById(
-                    "qr-modal"
-                );
-            modal.classList.remove(
-                "hidden"
-            );
-            const t1 =
-                document
-                    .getElementById("team1-input")
-                    .value
-                    .trim()
-                || "TEAM 1";
-            const t2 =
-                document
-                    .getElementById("team2-input")
-                    .value
-                    .trim()
-                || "TEAM 2";
+            const modal = document.getElementById("qr-modal");
+            modal.classList.remove("hidden");
+            const t1 = document.getElementById("team1-input").value.trim() || "TEAM 1";
+            const t2 = document.getElementById("team2-input").value.trim() || "TEAM 2";
             const title0 = document.getElementById("modal-t0-title");
             if (title0) title0.textContent = t1;
             const title1 = document.getElementById("modal-t1-title");
             if (title1) title1.textContent = t2;
-            const qrBox0 =
-                document.getElementById(
-                    "modal-qr-0"
-                );
-            const qrBox1 =
-                document.getElementById(
-                    "modal-qr-1"
-                );
+            const qrBox0 = document.getElementById("modal-qr-0");
+            const qrBox1 = document.getElementById("modal-qr-1");
             qrBox0.innerHTML = "";
             qrBox1.innerHTML = "";
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
@@ -6314,88 +6051,49 @@
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
             const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
-            if (qrBox0) qrBox0.innerHTML = "";
-            if (qrBox1) qrBox1.innerHTML = "";
             if (qrBox0) new QRCode(qrBox0, { text: team0Url, width: 560, height: 560 });
             if (qrBox1) new QRCode(qrBox1, { text: team1Url, width: 560, height: 560 });
             updateWebRTCLobbyState();
             updateBuzzerConnectUI();
         }
+
         function updateBuzzerConnectUI() {
-            const btn =
-                document.getElementById(
-                    "qr-modal-btn"
-                );
-            const title =
-                document.getElementById(
-                    "modal-qr-title"
-                );
-            const desc =
-                document.getElementById(
-                    "modal-qr-desc"
-                );
-            const isReconnect =
-                buzzersEverConnected ||
-                (peers[0].connected &&
-                    peers[1].connected);
+            const btn = document.getElementById("qr-modal-btn");
+            const title = document.getElementById("modal-qr-title");
+            const desc = document.getElementById("modal-qr-desc");
+            const isReconnect = buzzersEverConnected || (peers[0].connected && peers[1].connected);
             if (isReconnect) {
-                if (btn) {
-                    btn.innerHTML =
-                        "Reconnect<br>Buzzers";
-                }
-                if (title) {
-                    title.innerHTML =
-                        'SCAN TO <span style="color:#facc15;">RECONNECT PHONE</span>';
-                }
-                if (desc) {
-                    desc.textContent =
-                        "Scan the QR code with your team's phone to reconnect the buzzer";
-                }
+                if (btn) btn.innerHTML = "Reconnect<br>Buzzers";
+                if (title) title.innerHTML = 'SCAN TO <span style="color:#facc15;">RECONNECT PHONE</span>';
+                if (desc) desc.textContent = "Scan the QR code with your team's phone to reconnect the buzzer";
             } else {
-                if (btn) {
-                    btn.innerHTML =
-                        "Connect<br>Buzzers";
-                }
-                if (title) {
-                    title.innerHTML =
-                        'SCAN TO <span style="color:#facc15;">CONNECT PHONE</span>';
-                }
-                if (desc) {
-                    desc.textContent =
-                        "Scan the QR code with your team's phone to use it as your buzzer";
-                }
+                if (btn) btn.innerHTML = "Connect<br>Buzzers";
+                if (title) title.innerHTML = 'SCAN TO <span style="color:#facc15;">CONNECT PHONE</span>';
+                if (desc) desc.textContent = "Scan the QR code with your team's phone to use it as your buzzer";
             }
         }
+
         function closeQrModal() {
-            document
-                .getElementById(
-                    "qr-modal"
-                )
-                .classList.add(
-                    "hidden"
-                );
+            document.getElementById("qr-modal").classList.add("hidden");
         }
+
         function goBackToSetup() {
-            showView(
-                "team-setup-view"
-            );
+            showView("team-setup-view");
         }
+
         /* ------------------------------------------------------------
            INITIALIZE
            ------------------------------------------------------------ */
         updateWebRTCLobbyState();
+
         /* ------------------------------------------------------------
            PAGE HIDE — notify phones when host tab closes / refreshes
-           pagehide fires reliably on both desktop and mobile for tab
-           close, refresh, and navigation away. We send GAME_OVER over
-           the WebRTC data channel so phones immediately show the Game
-           Over screen and stop reconnecting instead of looping on
-           "Reconnecting...".
            ------------------------------------------------------------ */
         window.addEventListener('pagehide', () => {
-            sendToBothTeams({ type: 'GAME_OVER' });
+            if (roomChannel) {
+                roomChannel.publish("game_over", { type: "GAME_OVER", timestamp: Date.now() });
+            }
         });
-    
 
 </script>
 </body>
