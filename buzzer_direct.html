@@ -6,6 +6,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Friendly Feud Buzzer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔔</text></svg>">
   <style>
     * {
       box-sizing: border-box;
@@ -543,8 +544,17 @@
     let isConnecting = false;
 
     function handleIncomingMessage(raw) {
-      const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+      let msg = raw;
+      if (typeof raw === "string") {
+        try {
+          msg = JSON.parse(raw);
+        } catch (e) {
+          console.warn("Incoming message parse warning:", raw);
+          return;
+        }
+      }
       if (!msg || typeof msg !== "object") return;
+      console.log("[Phone Received Message]:", msg);
 
       if (msg.type === "ARM") {
         setArmed();
@@ -561,7 +571,9 @@
 
     function buzz() {
       if (!phoneArmed || phoneBuzzed || gameOver) return;
-      if (!activeConn || !activeConn.open) {
+      const isDcOpen = activeConn?.dataChannel?.readyState === "open";
+      if (!activeConn || (!activeConn.open && !isDcOpen)) {
+        console.warn("[Buzz Ignored] Connection not open yet. activeConn:", activeConn);
         status.textContent = "Connecting to host...";
         return;
       }
@@ -571,21 +583,51 @@
       if (woodBoard) woodBoard.classList.add("buzzed");
       navigator.vibrate?.([80]);
 
-      try {
-        activeConn.send({
-          type: "BUZZ",
-          team: team,
-          timestamp: Date.now()
-        });
-      } catch (err) {
+      const payload = {
+        type: "BUZZ",
+        team: team,
+        timestamp: Date.now()
+      };
+
+      console.log("[Phone Buzzing!] Sending payload:", payload);
+
+      let sent = false;
+      if (activeConn.open) {
+        try {
+          activeConn.send(payload);
+          sent = true;
+        } catch (err) {
+          console.warn("PeerJS conn.send failed, attempting fallback:", err);
+        }
+      }
+
+      if (!sent && activeConn.dataChannel && activeConn.dataChannel.readyState === "open") {
+        try {
+          activeConn.dataChannel.send(JSON.stringify(payload));
+          sent = true;
+        } catch (err2) {
+          console.error("Direct dataChannel send also failed:", err2);
+        }
+      }
+
+      if (!sent) {
         phoneBuzzed = false;
         phoneArmed = true;
         btn.disabled = false;
         if (woodBoard) woodBoard.classList.remove("buzzed");
+        status.textContent = "Buzz send failed. Try again!";
       }
     }
 
     btn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      buzz();
+    });
+    btn.addEventListener("touchstart", (event) => {
+      event.preventDefault();
+      buzz();
+    }, { passive: false });
+    btn.addEventListener("click", (event) => {
       event.preventDefault();
       buzz();
     });
@@ -673,21 +715,27 @@
           console.log("[DataChannel Open] Connected to host!");
           isConnecting = false;
           activeConn = conn;
+          conn._open = true;
           connLbl.textContent = "CONNECTED";
           connLbl.style.color = "#4ade80";
-          if (dot) dot.classList.add("connected");
           status.textContent = "Connected to host! Waiting for face-off...";
           setStandby("Connected to host! Waiting for face-off...");
         };
 
-        if (conn.open) {
+        if (conn.open || conn.dataChannel?.readyState === "open") {
           handleOpen();
         } else {
           conn.on("open", handleOpen);
         }
 
         if (conn.dataChannel) {
-          conn.dataChannel.onopen = handleOpen;
+          conn.dataChannel.addEventListener("open", () => {
+            conn._open = true;
+            handleOpen();
+          });
+          conn.dataChannel.addEventListener("message", (evt) => {
+            handleIncomingMessage(evt.data);
+          });
         }
 
         if (conn.peerConnection) {
@@ -695,9 +743,11 @@
             const state = conn.peerConnection.iceConnectionState;
             console.log("[Phone ICE State]:", state);
             if (state === "checking") {
-              status.textContent = "Pairing with host screen...";
+              if (!opened) status.textContent = "Pairing with host screen...";
             } else if (state === "connected" || state === "completed") {
-              handleOpen();
+              if (conn.open || conn.dataChannel?.readyState === "open") {
+                handleOpen();
+              }
             } else if (state === "failed") {
               status.textContent = "Connection issue. Retrying...";
               try { conn.close(); } catch(e) {}
@@ -710,11 +760,11 @@
         });
 
         conn.on("close", () => {
+          console.log("[Phone Disconnected from Host]");
           isConnecting = false;
           activeConn = null;
           connLbl.textContent = "DISCONNECTED";
           connLbl.style.color = "#f87171";
-          if (dot) dot.classList.remove("connected");
           status.textContent = "Disconnected from host. Reconnecting...";
           scheduleReconnect();
         });

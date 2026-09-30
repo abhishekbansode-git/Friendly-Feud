@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Friendly Feud</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔔</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -5652,24 +5653,33 @@
                 const markTeamReady = () => {
                     if (readyTriggered) return;
                     readyTriggered = true;
+                    conn._open = true;
                     console.log(`[Buzzer Connected & Ready] Team ${team} (${teamName})!`);
                     peers[team].connected = true;
                     buzzersEverConnected = true;
                     updateWebRTCLobbyState();
+                    // Send phone registration confirmation
+                    sendToTeam(team, { type: "PHONE_REGISTERED", team: team, name: teamName });
                     if (buzzersArmed) {
                         sendToTeam(team, { type: "ARM" });
                     }
                 };
 
                 // Trigger ready when channel opens or ICE finishes
-                if (conn.open) {
+                if (conn.open || conn.dataChannel?.readyState === "open") {
                     markTeamReady();
                 } else {
                     conn.on("open", markTeamReady);
                 }
 
                 if (conn.dataChannel) {
-                    conn.dataChannel.onopen = markTeamReady;
+                    conn.dataChannel.addEventListener("open", () => {
+                        conn._open = true;
+                        markTeamReady();
+                    });
+                    conn.dataChannel.addEventListener("message", (evt) => {
+                        handleBuzzerMessage(team, evt.data);
+                    });
                 }
 
                 if (conn.peerConnection) {
@@ -5677,7 +5687,9 @@
                         const state = conn.peerConnection.iceConnectionState;
                         console.log(`[ICE Team ${team}]:`, state);
                         if (state === "connected" || state === "completed") {
-                            markTeamReady();
+                            if (conn.open || conn.dataChannel?.readyState === "open") {
+                                markTeamReady();
+                            }
                         }
                     });
                 }
@@ -5694,7 +5706,6 @@
 
                 conn.on("error", (err) => {
                     console.warn(`[Team ${team} Non-fatal Notice]:`, err?.message || err);
-                    // Do not reset connection on non-fatal errors; close event handles actual disconnects
                 });
             });
 
@@ -5710,11 +5721,22 @@
 
         function sendToTeam(team, message) {
             const conn = peers[team]?.conn;
-            if (conn && conn.open) {
-                try {
-                    conn.send(message);
-                } catch (e) {
-                    console.error("sendToTeam error:", e);
+            if (conn) {
+                if (!conn.open && conn.dataChannel?.readyState === "open") {
+                    conn._open = true;
+                }
+                const serialized = typeof message === "string" ? message : JSON.stringify(message);
+                if (conn.open) {
+                    try {
+                        conn.send(message);
+                    } catch (e) {
+                        console.warn("sendToTeam conn.send fallback:", e);
+                        if (conn.dataChannel && conn.dataChannel.readyState === "open") {
+                            try { conn.dataChannel.send(serialized); } catch(e2) {}
+                        }
+                    }
+                } else if (conn.dataChannel && conn.dataChannel.readyState === "open") {
+                    try { conn.dataChannel.send(serialized); } catch(e2) {}
                 }
             }
         }
@@ -5746,10 +5768,12 @@
                     typeof rawMessage === "string"
                         ? JSON.parse(rawMessage)
                         : rawMessage;
-                if (msg.type === "BUZZ") {
+                console.log(`[Host Received Message] from Team ${team}:`, msg);
+                if (msg && msg.type === "BUZZ") {
                     handleTeamBuzz(team);
                 }
             } catch (error) {
+                console.error("handleBuzzerMessage parse error:", error);
             }
         }
         /* ------------------------------------------------------------
@@ -6142,12 +6166,7 @@
              * room + team + phone page.
              */
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
-            let basePhoneUrl;
-            if (/friendlyfeud_direct\.html/i.test(currentUrl)) {
-                basePhoneUrl = currentUrl.replace(/friendlyfeud_direct\.html/i, 'buzzer_direct.html');
-            } else {
-                basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
-            }
+            let basePhoneUrl = currentUrl.replace(/friendlyfeud[^\/]*\.html/i, 'buzzer.html');
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
             const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
@@ -6203,12 +6222,7 @@
             qrBox0.innerHTML = "";
             qrBox1.innerHTML = "";
             const currentUrl = window.location.href.split('?')[0].split('#')[0];
-            let basePhoneUrl;
-            if (/friendlyfeud_direct\.html/i.test(currentUrl)) {
-                basePhoneUrl = currentUrl.replace(/friendlyfeud_direct\.html/i, 'buzzer_direct.html');
-            } else {
-                basePhoneUrl = currentUrl.replace(/friendlyfeud.*\.html/i, 'buzzer.html');
-            }
+            let basePhoneUrl = currentUrl.replace(/friendlyfeud[^\/]*\.html/i, 'buzzer.html');
             const team0Url = `${basePhoneUrl}?room=${roomCode}&team=0&name=${encodeURIComponent(t1)}&color=%233b82f6`;
             const team1Url = `${basePhoneUrl}?room=${roomCode}&team=1&name=${encodeURIComponent(t2)}&color=%23ef4444`;
 
