@@ -451,7 +451,14 @@
       btn.textContent = "GAME OVER";
       status.textContent = "Game finished";
       if (woodBoard) woodBoard.classList.remove("buzzed");
-      if (gameOverScreen) gameOverScreen.classList.add("active");
+      if (gameOverScreen) {
+        gameOverScreen.classList.add("active");
+        gameOverScreen.onclick = () => {
+          gameOver = false;
+          gameOverScreen.classList.remove("active");
+          connectPeer();
+        };
+      }
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (peerRecoveryTimer) { clearTimeout(peerRecoveryTimer); peerRecoveryTimer = null; }
       if (signalingWs) { try { signalingWs.close(); } catch (error) { } }
@@ -680,7 +687,7 @@
         }
 
         if (conn.dataChannel) {
-          conn.dataChannel.addEventListener("open", handleOpen);
+          conn.dataChannel.onopen = handleOpen;
         }
 
         if (conn.peerConnection) {
@@ -690,7 +697,7 @@
             if (state === "checking") {
               status.textContent = "Pairing with host screen...";
             } else if (state === "connected" || state === "completed") {
-              setTimeout(handleOpen, 50);
+              handleOpen();
             } else if (state === "failed") {
               status.textContent = "Connection issue. Retrying...";
               try { conn.close(); } catch(e) {}

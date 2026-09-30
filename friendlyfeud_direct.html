@@ -5583,7 +5583,8 @@
         /* ============================================================
    DIRECT WEBRTC (PEERJS) - ZERO CLOUDFLARE, GITHUB PAGES READY
    ============================================================ */
-        let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+        let roomCode = sessionStorage.getItem("feud_host_room") || Math.random().toString(36).substring(2, 6).toUpperCase();
+        sessionStorage.setItem("feud_host_room", roomCode);
         let hostPeer = null;
         let hostPeerStarting = false;
         const peers = {
@@ -5647,32 +5648,28 @@
                 peers[team].conn = conn;
                 peers[team].name = teamName;
 
-                let opened = false;
-                const handleOpen = () => {
-                    if (opened) return;
-                    opened = true;
-                    console.log(`[DataChannel Open] Team ${team} is ready!`);
+                let readyTriggered = false;
+                const markTeamReady = () => {
+                    if (readyTriggered) return;
+                    readyTriggered = true;
+                    console.log(`[Buzzer Connected & Ready] Team ${team} (${teamName})!`);
                     peers[team].connected = true;
                     buzzersEverConnected = true;
                     updateWebRTCLobbyState();
-                    try {
-                        conn.send({ type: "PHONE_REGISTERED", team: team });
-                        if (buzzersArmed) {
-                            conn.send({ type: "ARM" });
-                        }
-                    } catch (err) {
-                        console.error("send error:", err);
+                    if (buzzersArmed) {
+                        sendToTeam(team, { type: "ARM" });
                     }
                 };
 
+                // Trigger ready when channel opens or ICE finishes
                 if (conn.open) {
-                    handleOpen();
+                    markTeamReady();
                 } else {
-                    conn.on("open", handleOpen);
+                    conn.on("open", markTeamReady);
                 }
 
                 if (conn.dataChannel) {
-                    conn.dataChannel.addEventListener("open", handleOpen);
+                    conn.dataChannel.onopen = markTeamReady;
                 }
 
                 if (conn.peerConnection) {
@@ -5680,7 +5677,7 @@
                         const state = conn.peerConnection.iceConnectionState;
                         console.log(`[ICE Team ${team}]:`, state);
                         if (state === "connected" || state === "completed") {
-                            setTimeout(handleOpen, 50);
+                            markTeamReady();
                         }
                     });
                 }
@@ -5696,9 +5693,8 @@
                 });
 
                 conn.on("error", (err) => {
-                    console.error(`[Team ${team} Connection Error]:`, err);
-                    peers[team].connected = false;
-                    updateWebRTCLobbyState();
+                    console.warn(`[Team ${team} Non-fatal Notice]:`, err?.message || err);
+                    // Do not reset connection on non-fatal errors; close event handles actual disconnects
                 });
             });
 
