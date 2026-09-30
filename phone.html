@@ -3,6 +3,25 @@
 
 <head>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Firebase SDK (fallback relay for same-network / ICE-fail scenarios) -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+      import { getDatabase, ref, set, onValue, remove, onDisconnect }
+        from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+      const firebaseConfig = {
+        apiKey: "AIzaSyBhngPbopH7sLfZ3wH7kEZR290D9qSocQw",
+        authDomain: "friendly-feud-f45b2.firebaseapp.com",
+        databaseURL: "https://friendly-feud-f45b2-default-rtdb.firebaseio.com",
+        projectId: "friendly-feud-f45b2",
+        storageBucket: "friendly-feud-f45b2.firebasestorage.app",
+        messagingSenderId: "822642189799",
+        appId: "1:822642189799:web:453b5f4beed47584db8942"
+      };
+      const fbApp = initializeApp(firebaseConfig);
+      const fbDb  = getDatabase(fbApp);
+      window._ffDb       = fbDb;
+      window._ffFirebase = { ref, set, onValue, remove, onDisconnect };
+    </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Friendly Feud Phone</title>
@@ -536,12 +555,84 @@
       }
     }
     // ============================================================
-    // DIRECT WEBRTC (PEERJS) - ZERO CLOUDFLARE, GITHUB PAGES READY
+    // HYBRID TRANSPORT: WebRTC primary + Firebase Realtime DB fallback
     // ============================================================
     let phonePeer = null;
     let activeConn = null;
     let peerReconnectTimer = null;
     let isConnecting = false;
+
+    // ── Firebase fallback state ────────────────────────────────────
+    let _fbConnected = false;       // true once Firebase channel is open
+    let _fbUnsubs    = [];
+    let _fbHostStateSeq = 0;        // last processed seq — prevents re-processing same msg
+
+    function waitForFirebase(cb) {
+        if (window._ffDb) { cb(); return; }
+        const iv = setInterval(() => { if (window._ffDb) { clearInterval(iv); cb(); } }, 50);
+    }
+
+    // Register phone presence on Firebase + listen for host commands
+    function initFirebaseFallback() {
+        waitForFirebase(() => {
+            const { ref, set, onValue, onDisconnect } = window._ffFirebase;
+            const db = window._ffDb;
+            _fbUnsubs.forEach(u => u()); _fbUnsubs = [];
+            const rRef = path => ref(db, `rooms/${room}/${path}`);
+
+            // Announce presence
+            set(rRef(`phones/${team}/connected`), true);
+            set(rRef(`phones/${team}/name`), name);
+            onDisconnect(rRef(`phones/${team}/connected`)).set(false);
+
+            // Listen for host commands
+            const hu = onValue(rRef("hostState"), snap => {
+                const msg = snap.val();
+                if (!msg || !msg.seq || msg.seq <= _fbHostStateSeq) return;
+                _fbHostStateSeq = msg.seq;
+
+                // Only use Firebase path if WebRTC is NOT already connected
+                if (activeConn && activeConn.open) return;
+
+                console.log("[Firebase] Received from host:", msg);
+                _fbConnected = true;
+
+                if (!activeConn) {
+                    // Firebase is our channel — update connection UI
+                    connLbl.textContent = "CONNECTED (relay)";
+                    connLbl.style.color = "#4ade80";
+                    status.textContent = "Connected via relay. Waiting for face-off...";
+                    isConnecting = false;
+                }
+                handleIncomingMessage(msg);
+            });
+            _fbUnsubs.push(hu);
+
+            // Watch if host goes offline
+            const ou = onValue(rRef("hostOnline"), snap => {
+                if (snap.val() === false && !activeConn?.open) {
+                    connLbl.textContent = "DISCONNECTED";
+                    connLbl.style.color = "#f87171";
+                    status.textContent = "Host disconnected. Reconnecting...";
+                    scheduleReconnect();
+                }
+            });
+            _fbUnsubs.push(ou);
+
+            console.log("[Firebase Fallback] Phone registered for room:", room, "team:", team);
+        });
+    }
+
+    // Send buzz via Firebase (fallback channel)
+    function buzzViaFirebase() {
+        waitForFirebase(() => {
+            const { ref, set } = window._ffFirebase;
+            set(ref(window._ffDb, `rooms/${room}/buzz`), {
+                team: team,
+                seq: Date.now()
+            });
+        });
+    }
 
     function handleIncomingMessage(raw) {
       let msg = raw;
@@ -610,6 +701,17 @@
         }
       }
 
+      // Firebase fallback: if WebRTC failed or isn't open, send via Firebase
+      if (!sent && _fbConnected) {
+        try {
+          buzzViaFirebase();
+          sent = true;
+          console.log("[Buzz via Firebase fallback]");
+        } catch (fbErr) {
+          console.error("Firebase buzz also failed:", fbErr);
+        }
+      }
+
       if (!sent) {
         phoneBuzzed = false;
         phoneArmed = true;
@@ -637,6 +739,8 @@
       if (activeConn && activeConn.open) return;
       if (isConnecting) return;
       isConnecting = true;
+      // Always keep Firebase fallback running in parallel
+      initFirebaseFallback();
 
       if (peerReconnectTimer) {
         clearTimeout(peerReconnectTimer);

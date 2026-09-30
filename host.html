@@ -8,6 +8,25 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔔</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- Firebase SDK (fallback relay for same-network / ICE-fail scenarios) -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+      import { getDatabase, ref, set, onValue, remove, onDisconnect }
+        from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+      const firebaseConfig = {
+        apiKey: "AIzaSyBhngPbopH7sLfZ3wH7kEZR290D9qSocQw",
+        authDomain: "friendly-feud-f45b2.firebaseapp.com",
+        databaseURL: "https://friendly-feud-f45b2-default-rtdb.firebaseio.com",
+        projectId: "friendly-feud-f45b2",
+        storageBucket: "friendly-feud-f45b2.firebasestorage.app",
+        messagingSenderId: "822642189799",
+        appId: "1:822642189799:web:453b5f4beed47584db8942"
+      };
+      const fbApp = initializeApp(firebaseConfig);
+      const fbDb  = getDatabase(fbApp);
+      window._ffDb       = fbDb;
+      window._ffFirebase = { ref, set, onValue, remove, onDisconnect };
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -5583,7 +5602,9 @@
             };
         });
         /* ============================================================
-   DIRECT WEBRTC (PEERJS) - ZERO CLOUDFLARE, GITHUB PAGES READY
+   HYBRID TRANSPORT: WebRTC primary + Firebase Realtime DB fallback
+   - PeerJS/WebRTC is tried first (zero latency on working networks)
+   - Firebase auto-activates if ICE fails (e.g. same WiFi scenario)
    ============================================================ */
         let roomCode = sessionStorage.getItem("feud_host_room") || Math.random().toString(36).substring(2, 6).toUpperCase();
         sessionStorage.setItem("feud_host_room", roomCode);
@@ -5597,6 +5618,75 @@
         let buzzerToastTimer = null;
         let winningTeam = null;
         let buzzersEverConnected = false;
+
+        // ── Firebase fallback helpers ──────────────────────────────────
+        let _fbUnsubs = [];
+        let _fbBuzzSeenSeqs = new Set(); // dedup buzz events
+
+        function waitForFirebase(cb) {
+            if (window._ffDb) { cb(); return; }
+            const iv = setInterval(() => { if (window._ffDb) { clearInterval(iv); cb(); } }, 50);
+        }
+
+        function sendViaFirebase(message) {
+            waitForFirebase(() => {
+                const { ref, set } = window._ffFirebase;
+                set(ref(window._ffDb, `rooms/${roomCode}/hostState`), {
+                    ...message, seq: Date.now()
+                });
+            });
+        }
+
+        function initFirebaseFallback() {
+            waitForFirebase(() => {
+                const { ref, set, onValue, remove, onDisconnect } = window._ffFirebase;
+                const db = window._ffDb;
+                _fbUnsubs.forEach(u => u()); _fbUnsubs = [];
+                const rRef = path => ref(db, `rooms/${roomCode}/${path}`);
+
+                // Announce host is online; clean up on tab close
+                set(rRef("hostOnline"), true);
+                onDisconnect(rRef("hostOnline")).set(false);
+                onDisconnect(rRef("hostState")).set({ type: "GAME_OVER", seq: Date.now() });
+
+                // Watch phone presence
+                for (const team of [0, 1]) {
+                    const u = onValue(rRef(`phones/${team}/connected`), snap => {
+                        const online = snap.val() === true;
+                        if (online && !peers[team].connected) {
+                            peers[team].connected = true;
+                            buzzersEverConnected = true;
+                            console.log(`[Firebase] Team ${team} connected via fallback`);
+                            updateWebRTCLobbyState();
+                            set(rRef("hostState"), { type: "PHONE_REGISTERED", team, seq: Date.now() });
+                            if (buzzersArmed)
+                                setTimeout(() => set(rRef("hostState"), { type: "ARM", seq: Date.now() }), 200);
+                        } else if (!online && !peers[team].conn?.open) {
+                            peers[team].connected = false;
+                            updateWebRTCLobbyState();
+                        }
+                    });
+                    _fbUnsubs.push(u);
+                }
+
+                // Watch for buzz events
+                const bu = onValue(rRef("buzz"), snap => {
+                    const data = snap.val();
+                    if (!data || !data.seq) return;
+                    if (_fbBuzzSeenSeqs.has(data.seq)) return; // dedup
+                    _fbBuzzSeenSeqs.add(data.seq);
+                    if (_fbBuzzSeenSeqs.size > 50) _fbBuzzSeenSeqs.clear(); // prevent unbounded growth
+                    remove(rRef("buzz"));
+                    const team = Number(data.team);
+                    if (team === 0 || team === 1) {
+                        console.log(`[Firebase] Buzz from team ${team}`);
+                        handleTeamBuzz(team);
+                    }
+                });
+                _fbUnsubs.push(bu);
+                console.log("[Firebase Fallback] Active for room:", roomCode);
+            });
+        }
 
         function initHostPeer() {
             if (hostPeer && !hostPeer.destroyed && hostPeer.open) {
@@ -5747,6 +5837,8 @@
         function sendToBothTeams(message) {
             sendToTeam(0, message);
             sendToTeam(1, message);
+            // Mirror to Firebase so phones on fallback channel also receive
+            sendViaFirebase(message);
         }
 
         function notifyGameOverAndCloseConnections() {
@@ -6150,9 +6242,10 @@
                 .textContent =
                 t2;
             /*
-             * Start Cloudflare signaling.
+             * Start WebRTC (primary) + Firebase fallback simultaneously.
              */
             initHostPeer();
+            initFirebaseFallback();
             /*
              * QR code contains ONLY:
              * room + team + phone page.
@@ -6300,30 +6393,7 @@
             sendToBothTeams({ type: 'GAME_OVER' });
         });
     
-        function applyWifiConfig() {
-            const hInput = document.getElementById("wifi-host-input");
-            const pInput = document.getElementById("wifi-port-input");
-            if (hInput && hInput.value.trim()) {
-                wifiHost = hInput.value.trim();
-                localStorage.setItem("feud_wifi_host", wifiHost);
-            }
-            if (pInput && pInput.value.trim()) {
-                wifiPort = pInput.value.trim();
-                localStorage.setItem("feud_wifi_port", wifiPort);
-            }
-            if (signalWs) {
-                try { signalWs.close(); } catch (e) {}
-            }
-            initHostPeer();
-            openQrModal();
-        }
 
-        function populateWifiInputs() {
-            const hInput = document.getElementById("wifi-host-input");
-            const pInput = document.getElementById("wifi-port-input");
-            if (hInput) hInput.value = wifiHost;
-            if (pInput) pInput.value = wifiPort;
-        }
 </script>
 </body>
 
