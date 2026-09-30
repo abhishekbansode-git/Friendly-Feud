@@ -564,8 +564,32 @@
     }
 
     // ============================================================
-    // 0ms INSTANT BUZZ FUNCTION
+    // 0ms INSTANT BUZZ FUNCTION & LOCAL AUDIO SYNTHESIZER
     // ============================================================
+    let localAudioCtx = null;
+    function playLocalBuzzerChime(freq = 880) {
+      try {
+        if (!localAudioCtx) {
+          localAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (localAudioCtx.state === 'suspended') {
+          localAudioCtx.resume();
+        }
+        const now = localAudioCtx.currentTime;
+        const osc = localAudioCtx.createOscillator();
+        const gain = localAudioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(freq / 2, now + 0.1);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(localAudioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } catch (e) {}
+    }
+
     function buzz() {
       if (gameOver) return;
 
@@ -582,9 +606,10 @@
 
       if (phoneBuzzed) return;
 
-      // 0ms INSTANT LOCAL VISUAL & HAPTIC FEEDBACK
+      // 0ms INSTANT LOCAL VISUAL, AUDIO & HAPTIC FEEDBACK
       phoneBuzzed = true;
       if (woodBoard) woodBoard.classList.add("buzzed");
+      playLocalBuzzerChime(950);
 
       if (isLobbyTest) {
         navigator.vibrate?.([60]);
