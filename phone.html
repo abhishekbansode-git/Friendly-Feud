@@ -589,6 +589,13 @@
             const hu = onValue(rRef("hostState"), snap => {
                 const msg = snap.val();
                 if (!msg || !msg.seq || msg.seq <= _fbHostStateSeq) return;
+
+                // Ignore messages older than 30 seconds — stale data from previous session
+                if (Date.now() - msg.seq > 30000) {
+                    console.log("[Firebase] Ignoring stale hostState message:", msg.type, "age:", Date.now() - msg.seq, "ms");
+                    return;
+                }
+
                 _fbHostStateSeq = msg.seq;
 
                 // Only use Firebase path if WebRTC is NOT already connected

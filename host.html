@@ -5644,10 +5644,13 @@
                 _fbUnsubs.forEach(u => u()); _fbUnsubs = [];
                 const rRef = path => ref(db, `rooms/${roomCode}/${path}`);
 
-                // Announce host is online; clean up on tab close
+                // Clear any stale data from previous sessions, announce STANDBY
+                set(rRef("hostState"), { type: "STANDBY", seq: Date.now() });
+                set(rRef("buzz"), null);
                 set(rRef("hostOnline"), true);
                 onDisconnect(rRef("hostOnline")).set(false);
-                onDisconnect(rRef("hostState")).set({ type: "GAME_OVER", seq: Date.now() });
+                // When host tab closes, Firebase will write GAME_OVER automatically
+                onDisconnect(rRef("hostState")).set({ type: "GAME_OVER", seq: 9999999999999 });
 
                 // Watch phone presence
                 for (const team of [0, 1]) {
