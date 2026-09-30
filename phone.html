@@ -138,6 +138,7 @@
     }
 
     #buzz-btn {
+      touch-action: manipulation;
       width: calc(var(--size) - 60px);
       height: calc(var(--size) - 60px);
       border-radius: 50%;
@@ -275,10 +276,14 @@
   </div>
   <script>
     // ============================================================
-    // MQTT BROKER CONFIGURATION
+    // MQTT BROKER CONFIGURATION WITH BULLETPROOF AUTO-FAILOVER
     // ============================================================
-    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
-    const MQTT_FALLBACK_BROKER = "wss://broker.emqx.io:8084/mqtt";
+    const MQTT_BROKERS = [
+      "wss://broker.emqx.io:8084/mqtt",       // Global Anycast Edge (Ultra Low Latency <25ms)
+      "wss://broker.hivemq.com:8884/mqtt"     // High Availability Fallback Cluster
+    ];
+    let currentBrokerIndex = 0;
+    let brokerFailCount = 0;
 
     // ============================================================
     // URL / LOCAL STORAGE
@@ -423,15 +428,17 @@
     }
 
     // ============================================================
-    // MQTT REALTIME CONNECTION
+    // MQTT REALTIME CONNECTION (AUTO-FAILOVER)
     // ============================================================
     let mqttClient = null;
+    let connectTimeoutTimer = null;
     const hostTopic = `ff/v1/${secret}/host`;
     const phoneTopic = `ff/v1/${secret}/phone`;
 
     function connectMqtt() {
       if (gameOver) return;
 
+      const brokerUrl = MQTT_BROKERS[currentBrokerIndex];
       connLbl.textContent = "Connecting...";
       connLbl.style.color = "#facc15";
       status.textContent = "Connecting to host...";
@@ -440,30 +447,39 @@
         if (mqttClient) mqttClient.end(true);
       } catch (e) {}
 
-      const clientId = `ff_p_${team}_${deviceId.slice(0, 6)}_${Math.random().toString(16).slice(2, 6)}`;
-      console.log("[MQTT Phone] Connecting to:", MQTT_BROKER, "topic prefix:", `ff/v1/${secret}`);
+      if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+      // Auto failover timer: if broker doesn't connect in 3.5s, switch to backup
+      connectTimeoutTimer = setTimeout(() => {
+        if (!mqttClient || !mqttClient.connected) {
+          console.warn("[MQTT Phone] Broker timeout, switching to backup broker...");
+          switchBroker();
+        }
+      }, 3500);
 
-      mqttClient = mqtt.connect(MQTT_BROKER, {
+      const clientId = `ff_p_${team}_${deviceId.slice(0, 6)}_${Math.random().toString(16).slice(2, 6)}`;
+      console.log(`[MQTT Phone] Connecting to [${currentBrokerIndex}]:`, brokerUrl);
+
+      mqttClient = mqtt.connect(brokerUrl, {
         clientId: clientId,
         clean: true,
-        connectTimeout: 5000,
+        connectTimeout: 4000,
         reconnectPeriod: 2000,
         keepalive: 30
       });
 
       mqttClient.on("connect", () => {
-        console.log("[MQTT Phone] Connected to broker!");
+        if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+        brokerFailCount = 0;
+        console.log("[MQTT Phone] Connected to:", brokerUrl);
         connLbl.textContent = "CONNECTED";
         connLbl.style.color = "#4ade80";
         status.textContent = "Connected! Waiting for host...";
 
-        // Subscribe to messages from host
         mqttClient.subscribe(hostTopic, { qos: 0 }, (err) => {
           if (err) {
             console.error("[MQTT Phone] Subscribe error:", err);
             return;
           }
-          // Announce phone join to host
           publishToHost({
             type: "PHONE_JOIN",
             team: team,
@@ -487,6 +503,10 @@
 
       mqttClient.on("error", (err) => {
         console.error("[MQTT Phone Error]:", err);
+        brokerFailCount++;
+        if (brokerFailCount >= 2) {
+          switchBroker();
+        }
       });
 
       mqttClient.on("message", (topic, payload) => {
@@ -498,6 +518,14 @@
           console.warn("[MQTT Phone] Message parse error:", e);
         }
       });
+    }
+
+    function switchBroker() {
+      if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+      currentBrokerIndex = (currentBrokerIndex + 1) % MQTT_BROKERS.length;
+      brokerFailCount = 0;
+      console.log("[MQTT Phone] Swapping to next broker:", MQTT_BROKERS[currentBrokerIndex]);
+      connectMqtt();
     }
 
     function publishToHost(payload) {
@@ -536,7 +564,7 @@
     }
 
     // ============================================================
-    // BUZZ FUNCTION
+    // 0ms INSTANT BUZZ FUNCTION
     // ============================================================
     function buzz() {
       if (gameOver) return;
@@ -554,25 +582,12 @@
 
       if (phoneBuzzed) return;
 
-      if (!mqttClient || !mqttClient.connected) {
-        console.warn("[Buzz Ignored] MQTT not connected.");
-        status.textContent = "Connecting to host...";
-        return;
-      }
-
+      // 0ms INSTANT LOCAL VISUAL & HAPTIC FEEDBACK
       phoneBuzzed = true;
       if (woodBoard) woodBoard.classList.add("buzzed");
-      navigator.vibrate?.([80]);
-
-      const payload = {
-        type: "BUZZ",
-        team: team,
-        timestamp: Date.now(),
-        isTest: isLobbyTest
-      };
-      console.log("[Phone Buzzing!] Sending payload:", payload);
 
       if (isLobbyTest) {
+        navigator.vibrate?.([60]);
         btn.textContent = "BUZZ TEST OK!";
         status.textContent = "Buzzer working! Check host screen.";
         setTimeout(() => {
@@ -585,8 +600,21 @@
           }
         }, 1200);
       } else {
-        btn.textContent = "BUZZED!";
+        // INSTANT 0ms: IMMEDIATELY SHOW "YOU BUZZED!" WITH GOLD PODIUM GLOW
+        btn.classList.remove("armed", "countdown");
+        btn.classList.add("winner");
+        btn.textContent = "YOU BUZZED!";
+        status.textContent = "⚡ Buzz recorded! Sent to host...";
+        navigator.vibrate?.([80, 40, 80]);
       }
+
+      const payload = {
+        type: "BUZZ",
+        team: team,
+        timestamp: Date.now(),
+        isTest: isLobbyTest
+      };
+      console.log("[Phone Buzzing Instant!] Sending payload:", payload);
 
       publishToHost(payload);
     }

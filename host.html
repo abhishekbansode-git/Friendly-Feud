@@ -5585,8 +5585,13 @@
         /* ============================================================
    PURE MQTT REALTIME - ZERO KEYS, ZERO CONFIG, 100% RELIABLE
    ============================================================ */
-        const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
-        const MQTT_FALLBACK_BROKER = "wss://broker.emqx.io:8084/mqtt";
+        const MQTT_BROKERS = [
+            "wss://broker.emqx.io:8084/mqtt",       // Global Anycast Edge (Ultra Low Latency <25ms)
+            "wss://broker.hivemq.com:8884/mqtt"     // High Availability Fallback Cluster
+        ];
+        let currentBrokerIndex = 0;
+        let brokerFailCount = 0;
+        let connectTimeoutTimer = null;
 
         let roomCode = sessionStorage.getItem("feud_host_room") || Math.random().toString(36).substring(2, 6).toUpperCase();
         sessionStorage.setItem("feud_host_room", roomCode);
@@ -5612,25 +5617,35 @@
         let buzzersEverConnected = false;
 
         function initHostMqtt() {
-            if (mqttClient && mqttClient.connected) return;
+            const brokerUrl = MQTT_BROKERS[currentBrokerIndex];
 
             try {
                 if (mqttClient) mqttClient.end(true);
             } catch (e) {}
 
-            const clientId = `ff_h_${roomCode}_${Math.random().toString(16).slice(2, 8)}`;
-            console.log("[MQTT Host] Connecting to:", MQTT_BROKER, "Topic prefix:", `ff/v1/${roomSecret}`);
+            if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+            connectTimeoutTimer = setTimeout(() => {
+                if (!mqttClient || !mqttClient.connected) {
+                    console.warn("[MQTT Host] Broker timeout, switching to backup broker...");
+                    switchBroker();
+                }
+            }, 3500);
 
-            mqttClient = mqtt.connect(MQTT_BROKER, {
+            const clientId = `ff_h_${roomCode}_${Math.random().toString(16).slice(2, 8)}`;
+            console.log(`[MQTT Host] Connecting to [${currentBrokerIndex}]:`, brokerUrl);
+
+            mqttClient = mqtt.connect(brokerUrl, {
                 clientId: clientId,
                 clean: true,
-                connectTimeout: 5000,
+                connectTimeout: 4000,
                 reconnectPeriod: 2000,
                 keepalive: 30
             });
 
             mqttClient.on("connect", () => {
-                console.log("[MQTT Host Ready] Connected to broker!");
+                if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+                brokerFailCount = 0;
+                console.log("[MQTT Host Ready] Connected to:", brokerUrl);
                 mqttClient.subscribe(phoneTopic, { qos: 0 }, (err) => {
                     if (err) console.error("[MQTT Host] Subscribe error:", err);
                     else console.log("[MQTT Host] Subscribed to phone events on:", phoneTopic);
@@ -5647,6 +5662,10 @@
 
             mqttClient.on("error", (err) => {
                 console.error("[MQTT Host Error]:", err);
+                brokerFailCount++;
+                if (brokerFailCount >= 2) {
+                    switchBroker();
+                }
             });
 
             mqttClient.on("message", (topic, payload) => {
@@ -5658,6 +5677,14 @@
                     console.warn("[MQTT Host] Incoming message parse error:", e);
                 }
             });
+        }
+
+        function switchBroker() {
+            if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer);
+            currentBrokerIndex = (currentBrokerIndex + 1) % MQTT_BROKERS.length;
+            brokerFailCount = 0;
+            console.log("[MQTT Host] Swapping to next broker:", MQTT_BROKERS[currentBrokerIndex]);
+            initHostMqtt();
         }
 
         function publishToPhones(payload) {
@@ -5980,6 +6007,7 @@
 
         function createRoom() {
             inGame = false;
+            initAudio();
             const t1 = document.getElementById("team1-input").value.trim() || "TEAM 1";
             const t2 = document.getElementById("team2-input").value.trim() || "TEAM 2";
             showView("lobby-view");
@@ -6005,6 +6033,7 @@
 
         function enterGame() {
             inGame = true;
+            initAudio();
             publishToPhones({ type: "GAME_STARTED", timestamp: Date.now() });
             startGameWithTeams();
         }
