@@ -5698,11 +5698,27 @@
 
             if (msg.type === "PHONE_JOIN") {
                 handlePhoneJoin(msg);
+            } else if (msg.type === "PHONE_LEAVE") {
+                const team = Number(msg.team);
+                if (peers[team] && peers[team].deviceId === msg.deviceId) {
+                    console.log(`[MQTT Host] Phone disconnected/left: Team ${team}`);
+                    peers[team].connected = false;
+                    if (!inGame) {
+                        peers[team].deviceId = null;
+                    }
+                    updateWebRTCLobbyState();
+                }
             } else if (msg.type === "BUZZ") {
+                const team = Number(msg.team);
+                // Security check: Ignore buzzes from non-registered or rejected devices
+                if (peers[team] && peers[team].deviceId && msg.deviceId && peers[team].deviceId !== msg.deviceId) {
+                    console.warn(`[Host] Ignored unauthorized buzz from ${msg.deviceId} for Team ${team}`);
+                    return;
+                }
                 if (msg.isTest) {
-                    handleTestBuzz(Number(msg.team));
+                    handleTestBuzz(team);
                 } else {
-                    handleTeamBuzz(Number(msg.team));
+                    handleTeamBuzz(team);
                 }
             }
         }
@@ -5713,7 +5729,19 @@
                 ? (document.getElementById("team1-input")?.value?.trim() || data.name || "TEAM 1")
                 : (document.getElementById("team2-input")?.value?.trim() || data.name || "TEAM 2");
 
-            console.log(`[MQTT Host] Phone Connected: Team ${team} (${teamName})`);
+            // CHECK: Is this team already connected to another device?
+            if (peers[team].connected && peers[team].deviceId && peers[team].deviceId !== data.deviceId) {
+                console.warn(`[MQTT Host] Rejected device ${data.deviceId} for Team ${team}. Already connected to ${peers[team].deviceId}`);
+                publishToPhones({
+                    type: "PHONE_REJECTED",
+                    team: team,
+                    targetDeviceId: data.deviceId,
+                    reason: `${teamName.toUpperCase()} is already connected on another phone. Only 1 device per team is allowed!`
+                });
+                return;
+            }
+
+            console.log(`[MQTT Host] Phone Connected: Team ${team} (${teamName}) - Device: ${data.deviceId}`);
             peers[team].connected = true;
             peers[team].name = teamName;
             peers[team].deviceId = data.deviceId;
@@ -5723,10 +5751,19 @@
             publishToPhones({
                 type: "PHONE_ACK",
                 team: team,
+                targetDeviceId: data.deviceId,
                 name: teamName,
                 inLobby: !inGame,
                 armed: inGame ? buzzersArmed : true
             });
+        }
+
+        function resetTeamPhone(team) {
+            if (peers[team]) {
+                peers[team].connected = false;
+                peers[team].deviceId = null;
+                updateWebRTCLobbyState();
+            }
         }
 
         function handleTestBuzz(team) {

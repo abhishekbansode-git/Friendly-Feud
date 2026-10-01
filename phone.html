@@ -274,6 +274,16 @@
     <h1>GAME OVER</h1>
     <p>Thanks for playing!</p>
   </div>
+  <div id="already-connected-screen" class="game-over-screen" style="background: radial-gradient(ellipse at top, #7f1d1d 0%, #450a0a 60%, #1a0505 100%); z-index: 2000;" aria-live="polite">
+    <div style="font-size: 56px; margin-bottom: 16px;">🚫</div>
+    <h1 style="color: #fca5a5; font-size: clamp(26px, 7vw, 42px); line-height: 1.2;">ALREADY CONNECTED</h1>
+    <p id="already-connected-msg" style="margin-top: 16px; font-size: clamp(15px, 4vw, 19px); color: #fecaca; max-width: 340px; line-height: 1.5;">
+      This team is already connected on another device. Only one buzzer per team is allowed!
+    </p>
+    <div style="margin-top: 24px; padding: 10px 18px; border-radius: 999px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); font-size: 13px; color: #e2e8f0;">
+      To change phones, ask the host to reset the lobby.
+    </div>
+  </div>
   <script>
     // ============================================================
     // MQTT BROKER CONFIGURATION WITH BULLETPROOF AUTO-FAILOVER
@@ -464,7 +474,17 @@
         clean: true,
         connectTimeout: 4000,
         reconnectPeriod: 2000,
-        keepalive: 30
+        keepalive: 30,
+        will: {
+          topic: phoneTopic,
+          payload: JSON.stringify({
+            type: "PHONE_LEAVE",
+            team: team,
+            deviceId: deviceId
+          }),
+          qos: 0,
+          retain: false
+        }
       });
 
       mqttClient.on("connect", () => {
@@ -533,12 +553,35 @@
       mqttClient.publish(phoneTopic, JSON.stringify(payload), { qos: 0 });
     }
 
+    function showAlreadyConnectedScreen(reason) {
+      teamRejected = true;
+      const screen = document.getElementById("already-connected-screen");
+      const msgEl = document.getElementById("already-connected-msg");
+      if (msgEl && reason) msgEl.textContent = reason;
+      if (screen) screen.classList.add("active");
+      connLbl.textContent = "BLOCKED";
+      connLbl.style.color = "#ef4444";
+      status.textContent = "Already connected on another device.";
+      btn.disabled = true;
+      btn.textContent = "BLOCKED";
+      try {
+        if (mqttClient) mqttClient.end(true);
+      } catch (e) {}
+    }
+
     function handleHostMessage(msg) {
       if (!msg || typeof msg !== "object") return;
       console.log("[MQTT Phone] Received host message:", msg);
 
+      if (msg.type === "PHONE_REJECTED") {
+        if (msg.targetDeviceId === deviceId) {
+          showAlreadyConnectedScreen(msg.reason);
+        }
+        return;
+      }
+
       if (msg.type === "PHONE_ACK") {
-        if (Number(msg.team) === team) {
+        if (Number(msg.team) === team && (!msg.targetDeviceId || msg.targetDeviceId === deviceId)) {
           connLbl.textContent = "CONNECTED";
           connLbl.style.color = "#4ade80";
           if (msg.inLobby) {
@@ -591,7 +634,7 @@
     }
 
     function buzz() {
-      if (gameOver) return;
+      if (gameOver || teamRejected) return;
 
       if (!phoneArmed) {
         status.textContent = "Buzzer locked until host reveals question!";
@@ -636,6 +679,7 @@
       const payload = {
         type: "BUZZ",
         team: team,
+        deviceId: deviceId,
         timestamp: Date.now(),
         isTest: isLobbyTest
       };
@@ -686,6 +730,12 @@
       if (!teamRejected && !gameOver && (!mqttClient || !mqttClient.connected)) {
         connectMqtt();
       }
+    });
+
+    window.addEventListener("pagehide", () => {
+      try {
+        publishToHost({ type: "PHONE_LEAVE", team: team, deviceId: deviceId });
+      } catch (e) {}
     });
 
     if ("wakeLock" in navigator) {
