@@ -655,7 +655,8 @@
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
             { urls: "stun:stun.cloudflare.com:3478" }
-          ]
+          ],
+          iceCandidatePoolSize: 2
         });
       /*
        * Make sure this peer is still current.
@@ -676,9 +677,14 @@
       pc.onicecandidate = (event) => {
         if (myGeneration !== peerGeneration) return;
         if (event.candidate) {
+          console.log("[Buzzer WebRTC] 📡 Streaming phone candidate to host");
           sendSignal({
             type: "candidate",
-            candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate
+            candidate: event.candidate.toJSON ? event.candidate.toJSON() : {
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid,
+              sdpMLineIndex: event.candidate.sdpMLineIndex
+            }
           });
         }
       };
@@ -937,8 +943,9 @@
           ) {
             return;
           }
+          console.log("%c[Buzzer WebRTC]%c 📥 Received WebRTC Offer from host! Creating answer...", "color: #06b6d4; font-weight: bold;", "color: inherit;");
           await pc.setRemoteDescription(
-            data.offer
+            new RTCSessionDescription(data.offer)
           );
           if (
             pc !== peer
@@ -967,12 +974,16 @@
           ) {
             return;
           }
+          const answerPayload = pc.localDescription.toJSON
+            ? pc.localDescription.toJSON()
+            : { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
+          console.log("%c[Buzzer WebRTC]%c 📤 Sent WebRTC Answer to host!", "color: #10b981; font-weight: bold;", "color: inherit;");
           sendSignal({
             type: "answer",
-            answer:
-              pc.localDescription
+            answer: answerPayload
           });
         } catch (error) {
+          console.error("[Buzzer WebRTC] Error handling offer:", error);
         }
         return;
       }
