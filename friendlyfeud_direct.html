@@ -5807,6 +5807,14 @@
 
             pc.onicecandidate = (event) => {
                 if (event.candidate) {
+                    // STOP streaming candidates once connected!
+                    if (peers[team].connected || (peers[team].channel && peers[team].channel.readyState === "open")) {
+                        return;
+                    }
+                    // Filter out TCP candidates (buzzers run exclusively on UDP)
+                    if (event.candidate.protocol === "tcp" || (event.candidate.candidate && event.candidate.candidate.includes(" tcp "))) {
+                        return;
+                    }
                     console.log(`[Host WebRTC] 📡 Streaming candidate to Team ${team}`);
                     sendSignal(team, {
                         type: "candidate",

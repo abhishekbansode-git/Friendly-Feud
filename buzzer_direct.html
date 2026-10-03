@@ -605,6 +605,14 @@
       pc.onicecandidate = (event) => {
         if (myGen !== peerGeneration) return;
         if (event.candidate) {
+          // STOP streaming candidates once connected!
+          if (channel && channel.readyState === "open") {
+            return;
+          }
+          // Filter out TCP candidates (buzzers run exclusively on UDP)
+          if (event.candidate.protocol === "tcp" || (event.candidate.candidate && event.candidate.candidate.includes(" tcp "))) {
+            return;
+          }
           console.log("[Buzzer WebRTC] 📡 Streaming phone candidate to host");
           sendSignal({
             type: "candidate",
