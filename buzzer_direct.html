@@ -541,7 +541,7 @@
       }
     }
     // ============================================================
-    // WEBRTC-ONLY RECOVERY
+    // WEBRTC PEER CONNECTION & RECOVERY (PHONE AS INITIATOR)
     // ============================================================
     function requestPeerRecovery() {
       if (teamRejected || gameOver || peerRecoveryInProgress) return;
@@ -553,129 +553,57 @@
       peerRecoveryTimer = setTimeout(() => {
         peerRecoveryTimer = null;
         if (teamRejected || gameOver) return;
-        if (!signalingWs || signalingWs.readyState !== WebSocket.OPEN) {
-          peerRecoveryInProgress = false;
-          return;
-        }
-        // Re-register on the existing signaling socket. The server treats
-        // the same device/team on the same socket as a reconnect and sends
-        // a fresh PHONE_JOINED event to the host.
-        try {
-          signalingWs.send(JSON.stringify({
-            type: "REGISTER_PHONE",
-            team,
-            name,
-            deviceId
-          }));
-        } catch (error) {
-          peerRecoveryInProgress = false;
-          return;
-        }
+        initiatePhoneCall();
         peerRecoveryInProgress = false;
       }, peerRecoveryDelay);
     }
-    // ============================================================
-    // CLOSE WEBRTC PEER
-    // ============================================================
+
     function closePeer() {
-      /*
-       * Increment generation FIRST.
-       *
-       * This immediately makes all events from the old peer
-       * stale.
-       */
       peerGeneration++;
-      candidateQueue = [];
-      remoteDescriptionSet = false;
       if (channel) {
-        try {
-          channel.close();
-        } catch (e) { }
+        try { channel.close(); } catch (e) { }
+        channel = null;
       }
-      channel = null;
       if (peer) {
+        try { peer.close(); } catch (e) { }
+        peer = null;
+      }
+      remoteDescriptionSet = false;
+      candidateQueue = [];
+    }
+
+    async function flushCandidateQueue() {
+      if (!peer || !remoteDescriptionSet) return;
+      const queued = candidateQueue.slice();
+      candidateQueue = [];
+      for (const cand of queued) {
         try {
-          peer.close();
+          await peer.addIceCandidate(new RTCIceCandidate(cand));
         } catch (e) { }
       }
-      peer = null;
     }
-    // ============================================================
-    // WAIT FOR ICE GATHERING
-    // ============================================================
-    function waitForIceGatheringComplete(pc, timeout = 10000) {
-      if (pc.iceGatheringState === "complete") {
-        return Promise.resolve();
-      }
-      return new Promise((resolve) => {
-        let finished = false;
-        const finish = () => {
-          if (finished) {
-            return;
-          }
-          finished = true;
-          pc.removeEventListener(
-            "icegatheringstatechange",
-            check
-          );
-          clearTimeout(timer);
-          resolve();
-        };
-        const check = () => {
-          if (pc.iceGatheringState === "complete") {
-            finish();
-          }
-        };
-        const timer = setTimeout(finish, timeout);
-        pc.addEventListener(
-          "icegatheringstatechange",
-          check
-        );
-      });
-    }
-    // ============================================================
-    // CREATE PHONE WEBRTC PEER
-    // ============================================================
-    async function createPhonePeer() {
-      /*
-       * Close any existing peer before creating the new one.
-       */
+
+    async function initiatePhoneCall() {
+      if (teamRejected || gameOver) return;
       closePeer();
-      const myGeneration =
-        peerGeneration;
-      status.textContent =
-        "Connecting direct peer...";
-      console.log("%c[Buzzer WebRTC]%c Creating RTCPeerConnection (STUN direct)...", "color: #06b6d4; font-weight: bold;", "color: inherit;");
-      // ----------------------------------------------------------
-      // CREATE RTCPeerConnection (DIRECT STUN)
-      // ----------------------------------------------------------
-      const pc =
-        new RTCPeerConnection({
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "stun:stun.cloudflare.com:3478" }
-          ],
-          iceCandidatePoolSize: 2
-        });
-      /*
-       * Make sure this peer is still current.
-       */
-      if (
-        myGeneration !==
-        peerGeneration
-      ) {
-        try {
-          pc.close();
-        } catch (e) { }
-        return null;
-      }
+      const myGen = peerGeneration;
+      status.textContent = "Connecting direct peer...";
+      console.log("%c[Buzzer WebRTC]%c 📞 Initiating direct WebRTC call to host...", "color: #06b6d4; font-weight: bold;", "color: inherit;");
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun.cloudflare.com:3478" }
+        ],
+        iceCandidatePoolSize: 2
+      });
       peer = pc;
-      /*
-       * Trickle ICE: stream candidates live to host
-       */
+      remoteDescriptionSet = false;
+      candidateQueue = [];
+
       pc.onicecandidate = (event) => {
-        if (myGeneration !== peerGeneration) return;
+        if (myGen !== peerGeneration) return;
         if (event.candidate) {
           console.log("[Buzzer WebRTC] 📡 Streaming phone candidate to host");
           sendSignal({
@@ -688,341 +616,101 @@
           });
         }
       };
-      // ==========================================================
-      // WEBRTC CONNECTION STATE
-      // ==========================================================
-      pc.onconnectionstatechange =
-        () => {
-          if (
-            myGeneration !==
-            peerGeneration
-          ) {
-            return;
-          }
-          if (
-            pc.connectionState ===
-            "connected"
-          ) {
-            connLbl.textContent =
-              "Connected";
-            connLbl.style.color =
-              "#22c55e";
-            peerRecoveryInProgress = false;
-            clearTimeout(peerRecoveryTimer);
-            peerRecoveryTimer = null;
-            peerRecoveryDelay = 1500;
-            status.textContent =
-              phoneArmed
-                ? "TAP NOW!"
-                : "Waiting for next question...";
-          }
-          else if (
-            [
-              "failed",
-              "disconnected",
-              "closed"
-            ].includes(
-              pc.connectionState
-            )
-          ) {
-            connLbl.textContent =
-              "Reconnecting...";
-            connLbl.style.color =
-              "#facc15";
-            requestPeerRecovery();
-            if (!phoneArmed) {
-              status.textContent =
-                "Reconnecting...";
+
+      pc.onconnectionstatechange = () => {
+        if (myGen !== peerGeneration) return;
+        console.log("[Buzzer WebRTC] Connection state:", pc.connectionState);
+        if (pc.connectionState === "connected") {
+          connLbl.textContent = "Connected";
+          connLbl.style.color = "#22c55e";
+          peerRecoveryInProgress = false;
+          clearTimeout(peerRecoveryTimer);
+          peerRecoveryTimer = null;
+          status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+        } else if (["failed", "closed"].includes(pc.connectionState)) {
+          connLbl.textContent = "Reconnecting...";
+          connLbl.style.color = "#facc15";
+          requestPeerRecovery();
+        }
+      };
+
+      // Create DataChannel from Phone -> Host
+      const ch = pc.createDataChannel("buzzer", { ordered: true });
+      channel = ch;
+      channel.onopen = () => {
+        if (myGen !== peerGeneration) return;
+        console.log("%c[Buzzer WebRTC]%c ✅ Direct DataChannel OPEN! Connected to host.", "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
+        connLbl.textContent = "Connected";
+        connLbl.style.color = "#22c55e";
+        status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+      };
+      channel.onclose = () => {
+        if (myGen !== peerGeneration) return;
+        console.warn("[Buzzer WebRTC] ❌ DataChannel closed by host");
+        channel = null;
+        connLbl.textContent = "Disconnected";
+        connLbl.style.color = "#ef4444";
+        if (!phoneArmed) status.textContent = "Reconnecting...";
+      };
+      channel.onerror = (err) => console.error("[Buzzer WebRTC] DataChannel error:", err);
+      channel.onmessage = (event) => {
+        if (myGen !== peerGeneration) return;
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "__FF_HEARTBEAT_PING") {
+            if (channel && channel.readyState === "open") {
+              channel.send(JSON.stringify({ type: "__FF_HEARTBEAT_PONG", at: message.at }));
             }
-          }
-        };
-      // ==========================================================
-      // INCOMING DATA CHANNEL
-      // ==========================================================
-      pc.ondatachannel =
-        (event) => {
-          if (
-            myGeneration !==
-            peerGeneration
-          ) {
-            try {
-              event.channel.close();
-            } catch (e) { }
             return;
           }
-          /*
-           * Close an unexpected duplicate channel.
-           */
-          if (
-            channel &&
-            channel !== event.channel
-          ) {
-            try {
-              channel.close();
-            } catch (e) { }
-          }
-          channel =
-            event.channel;
-          // ------------------------------------------------------
-          // CHANNEL OPEN
-          // ------------------------------------------------------
-          channel.onopen =
-            () => {
-              if (
-                myGeneration !==
-                peerGeneration
-              ) {
-                return;
-              }
-              console.log("%c[Buzzer WebRTC]%c ✅ Direct DataChannel OPEN! Connected to host.", "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
-              connLbl.textContent =
-                "Connected";
-              connLbl.style.color =
-                "#22c55e";
-              status.textContent =
-                phoneArmed
-                  ? "TAP NOW!"
-                  : "Waiting for next question...";
-            };
-          // ------------------------------------------------------
-          // CHANNEL MESSAGE
-          // ------------------------------------------------------
-          channel.onmessage =
-            (event) => {
-              if (
-                myGeneration !==
-                peerGeneration
-              ) {
-                return;
-              }
-              try {
-                const message = JSON.parse(event.data);
-                if (message.type === "__FF_HEARTBEAT_PING") {
-                  if (channel.readyState === "open") channel.send(JSON.stringify({ type: "__FF_HEARTBEAT_PONG", at: message.at }));
-                  return;
-                }
-              } catch (e) { }
-              handleGameMessage(event.data);
-            };
-          // ------------------------------------------------------
-          // CHANNEL CLOSE
-          // ------------------------------------------------------
-          channel.onclose =
-            () => {
-              if (
-                myGeneration !==
-                peerGeneration
-              ) {
-                return;
-              }
-              console.warn("[Buzzer WebRTC] ❌ DataChannel closed by peer");
-              if (
-                channel ===
-                event.channel
-              ) {
-                channel = null;
-              }
-              connLbl.textContent =
-                "Disconnected";
-              connLbl.style.color =
-                "#ef4444";
-              if (!phoneArmed) {
-                status.textContent =
-                  "Reconnecting...";
-              }
-            };
-          // ------------------------------------------------------
-          // CHANNEL ERROR
-          // ------------------------------------------------------
-          channel.onerror = (err) => {
-            console.error("[Buzzer WebRTC] DataChannel error:", err);
-          };
-          channel.onerror =
-            (error) => {
-              if (
-                myGeneration !==
-                peerGeneration
-              ) {
-                return;
-              }
-            };
-        };
-      return pc;
-    }
-    // ============================================================
-    // ENSURE PHONE PEER
-    // ============================================================
-    /*
-     * This is the main race-condition fix.
-     *
-     * If several signaling messages arrive while the peer is
-     * being created, they all wait for the SAME promise.
-     */
-    async function ensurePhonePeer() {
-      if (peer) {
-        return peer;
-      }
-      if (peerCreationPromise) {
-        await peerCreationPromise;
-        return peer;
-      }
-      peerCreationPromise =
-        createPhonePeer();
+        } catch (e) { }
+        handleGameMessage(event.data);
+      };
+
       try {
-        await peerCreationPromise;
-        return peer;
-      } finally {
-        peerCreationPromise = null;
+        const offer = await pc.createOffer();
+        if (myGen !== peerGeneration) return;
+        await pc.setLocalDescription(offer);
+        const offerPayload = pc.localDescription.toJSON
+          ? pc.localDescription.toJSON()
+          : { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
+        console.log("%c[Buzzer WebRTC]%c 📤 Sent WebRTC Offer to host!", "color: #06b6d4; font-weight: bold;", "color: inherit;");
+        sendSignal({
+          type: "offer",
+          offer: offerPayload
+        });
+      } catch (err) {
+        console.error("[Buzzer WebRTC] Error creating offer:", err);
       }
     }
-    // ============================================================
-    // FLUSH QUEUED ICE CANDIDATES
-    // ============================================================
-    async function flushCandidateQueue() {
-      if (
-        !peer ||
-        !remoteDescriptionSet
-      ) {
-        return;
-      }
-      const pc =
-        peer;
-      const queued =
-        candidateQueue.slice();
-      candidateQueue = [];
-      for (
-        const candidate of queued
-      ) {
-        /*
-         * Do not add candidates to a replacement peer.
-         */
-        if (
-          pc !== peer
-        ) {
-          return;
-        }
-        try {
-          await pc.addIceCandidate(
-            candidate
-          );
-        } catch (error) {
-        }
-      }
-    }
-    // ============================================================
-    // HANDLE SIGNALING MESSAGE
-    // ============================================================
+
     async function handleSignalMessage(msg) {
-      if (
-        msg.type !== "SIGNAL" ||
-        !msg.data
-      ) {
-        return;
-      }
-      const data =
-        msg.data;
-      // Wait for peer to be fully created (createPhonePeer is async).
-      const pc =
-        await ensurePhonePeer();
-      if (!pc) {
-        return;
-      }
-      // ==========================================================
-      // OFFER
-      // ==========================================================
-      if (
-        data.type === "offer" &&
-        data.offer
-      ) {
+      if (msg.type !== "SIGNAL" || !msg.data) return;
+      const data = msg.data;
+      if (data.type === "answer" && data.answer) {
+        if (!peer) return;
+        console.log("%c[Buzzer WebRTC]%c 📥 Received WebRTC Answer from host! Finalizing direct connection...", "color: #10b981; font-weight: bold;", "color: inherit;");
         try {
-          /*
-           * Ignore an offer for an old peer.
-           */
-          if (
-            pc !== peer
-          ) {
-            return;
-          }
-          console.log("%c[Buzzer WebRTC]%c 📥 Received WebRTC Offer from host! Creating answer...", "color: #06b6d4; font-weight: bold;", "color: inherit;");
-          await pc.setRemoteDescription(
-            new RTCSessionDescription(data.offer)
-          );
-          if (
-            pc !== peer
-          ) {
-            return;
-          }
+          await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
           remoteDescriptionSet = true;
           await flushCandidateQueue();
-          if (
-            pc !== peer
-          ) {
-            return;
-          }
-          const answer =
-            await pc.createAnswer();
-          if (
-            pc !== peer
-          ) {
-            return;
-          }
-          await pc.setLocalDescription(
-            answer
-          );
-          if (
-            pc !== peer
-          ) {
-            return;
-          }
-          const answerPayload = pc.localDescription.toJSON
-            ? pc.localDescription.toJSON()
-            : { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
-          console.log("%c[Buzzer WebRTC]%c 📤 Sent WebRTC Answer to host!", "color: #10b981; font-weight: bold;", "color: inherit;");
-          sendSignal({
-            type: "answer",
-            answer: answerPayload
-          });
-        } catch (error) {
-          console.error("[Buzzer WebRTC] Error handling offer:", error);
+        } catch (err) {
+          console.error("[Buzzer WebRTC] Error setting remote answer:", err);
         }
         return;
       }
-      // ==========================================================
-      // REMOTE ICE CANDIDATE
-      // ==========================================================
-      if (
-        data.type === "candidate" &&
-        data.candidate
-      ) {
-        /*
-         * If remote description isn't ready yet,
-         * hold the candidate.
-         */
-        if (
-          !remoteDescriptionSet
-        ) {
-          candidateQueue.push(
-            data.candidate
-          );
-          return;
-        }
-        /*
-         * Do not feed candidates into an old peer.
-         */
-        if (
-          pc !== peer
-        ) {
+      if (data.type === "candidate" && data.candidate) {
+        if (!peer || !remoteDescriptionSet) {
+          candidateQueue.push(data.candidate);
           return;
         }
         try {
-          await pc.addIceCandidate(
-            data.candidate
-          );
-        } catch (error) {
-        }
+          await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) { }
+        return;
       }
     }
-    // ============================================================
+        // ============================================================
     // GAME DATA CHANNEL
     // ============================================================
     function handleGameMessage(raw) {
@@ -1208,6 +896,7 @@
             "#facc15";
           status.textContent =
             "Connecting buzzer...";
+          initiatePhoneCall();
           // Registration is now performed by the Durable Object
           // during the WebSocket upgrade using URL parameters.
           /*
