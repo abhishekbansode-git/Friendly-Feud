@@ -645,6 +645,7 @@
         peerGeneration;
       status.textContent =
         "Connecting direct peer...";
+      console.log("%c[Buzzer WebRTC]%c Creating RTCPeerConnection (STUN direct)...", "color: #06b6d4; font-weight: bold;", "color: inherit;");
       // ----------------------------------------------------------
       // CREATE RTCPeerConnection (DIRECT STUN)
       // ----------------------------------------------------------
@@ -755,6 +756,7 @@
               ) {
                 return;
               }
+              console.log("%c[Buzzer WebRTC]%c ✅ Direct DataChannel OPEN! Connected to host.", "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
               connLbl.textContent =
                 "Connected";
               connLbl.style.color =
@@ -795,6 +797,7 @@
               ) {
                 return;
               }
+              console.warn("[Buzzer WebRTC] ❌ DataChannel closed by peer");
               if (
                 channel ===
                 event.channel
@@ -813,6 +816,9 @@
           // ------------------------------------------------------
           // CHANNEL ERROR
           // ------------------------------------------------------
+          channel.onerror = (err) => {
+            console.error("[Buzzer WebRTC] DataChannel error:", err);
+          };
           channel.onerror =
             (error) => {
               if (
@@ -1009,6 +1015,7 @@
       } catch (e) {
         return;
       }
+      console.log(`%c[Buzzer Game]%c Received: ${msg.type}`, "color: #a855f7; font-weight: bold;", "color: inherit;", msg);
       // ----------------------------------------------------------
       // GAME OVER
       // ----------------------------------------------------------
@@ -1022,6 +1029,7 @@
       if (
         msg.type === "ARM"
       ) {
+        console.log("%c[Buzzer Game]%c 🎯 BUZZER ARMED! Screen ready for tap!", "color: #eab308; font-weight: bold;", "color: inherit;");
         setArmed();
         return;
       }
@@ -1031,6 +1039,8 @@
       if (
         msg.type === "LOCK"
       ) {
+        const isWinner = Number(msg.winnerTeam) === team;
+        console.log(`%c[Buzzer Game]%c 🔒 BUZZER LOCKED. Winner Team: ${msg.winnerTeam} (You: ${isWinner ? "WINNER 🏆" : "Locked Out"})`, "color: #f97316; font-weight: bold;", "color: inherit;");
         setLocked(
           msg.winnerTeam
         );
@@ -1053,12 +1063,14 @@
     // ============================================================
     function buzz() {
       if (teamRejected || gameOver) {
+        console.warn("[Buzzer] Buzz ignored: teamRejected or gameOver");
         return;
       }
       if (
         !phoneArmed ||
         phoneBuzzed
       ) {
+        console.warn(`[Buzzer] Buzz ignored: phoneArmed=${phoneArmed}, phoneBuzzed=${phoneBuzzed}`);
         return;
       }
       if (
@@ -1066,6 +1078,7 @@
         channel.readyState !==
         "open"
       ) {
+        console.error(`[Buzzer] Buzz failed: DataChannel is not open (state: ${channel ? channel.readyState : "null"})`);
         return;
       }
       phoneBuzzed = true;
@@ -1076,18 +1089,15 @@
       }
       navigator.vibrate?.([80]);
       try {
-        channel.send(
-          JSON.stringify({
-            type: "BUZZ",
-            team,
-            timestamp: Date.now()
-          })
-        );
+        const payload = {
+          type: "BUZZ",
+          team,
+          timestamp: Date.now()
+        };
+        channel.send(JSON.stringify(payload));
+        console.log("%c[Buzzer Action]%c 🔔 BUZZ SENT TO HOST!", "color: #ef4444; font-weight: bold; font-size: 14px;", "color: inherit;", payload);
       } catch (error) {
-        /*
-         * If send failed, don't leave the buzzer falsely
-         * showing that the buzz was delivered.
-         */
+        console.error("[Buzzer Action] Failed to send buzz over DataChannel:", error);
         phoneBuzzed = false;
         phoneArmed = true;
         btn.disabled = false;
@@ -1172,6 +1182,7 @@
             } catch (e) { }
             return;
           }
+          console.log(`%c[Buzzer Signaling]%c 🌐 Connected to Cloudflare signaling worker (room: ${room}, team: ${team})`, "color: #3b82f6; font-weight: bold;", "color: inherit;");
           retryDelay = 1000;
           connLbl.textContent =
             "Connecting...";

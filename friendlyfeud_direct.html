@@ -5638,6 +5638,7 @@
             );
             signalWs.onopen = () => {
                 hostReconnectDelay = 1000;
+                console.log(`%c[Host Signaling]%c 🌐 WebSocket connected to room ${roomCode}`, "color: #3b82f6; font-weight: bold;", "color: inherit;");
                 // Registration is now performed by the Durable Object
                 // during the WebSocket upgrade using role=host in the URL.
             };
@@ -5649,6 +5650,7 @@
                      */
                     if (msg.type === "PHONE_JOINED") {
                         const team = Number(msg.team);
+                        console.log(`%c[Host WebRTC]%c 📱 Phone joined for Team ${team} (${msg.name || "Team " + (team + 1)})! Starting handshake...`, "color: #8b5cf6; font-weight: bold;", "color: inherit;");
                         peers[team].phoneToken = msg.phoneToken || peers[team].phoneToken;
                         peers[team].releaseSent = false;
                         await createPeerConnection(team);
@@ -5822,6 +5824,7 @@
             peers[team].channel = channel;
             channel.onopen = () => {
                 peers[team].connected = true;
+                console.log(`%c[Host WebRTC]%c ✅ Direct DataChannel OPEN for Team ${team}! P2P connected.`, "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
                 updateWebRTCLobbyState();
                 /*
                  * IMPORTANT:
@@ -5842,6 +5845,7 @@
             };
             channel.onclose = () => {
                 peers[team].connected = false;
+                console.warn(`[Host WebRTC] ❌ DataChannel CLOSED for Team ${team}`);
                 updateWebRTCLobbyState();
             };
             channel.onerror = (error) => {
@@ -6048,15 +6052,18 @@
              * If buzzers are not armed, ignore.
              */
             if (!buzzersArmed) {
+                console.warn(`[Host Buzzer] Ignored BUZZ from Team ${team}: buzzers are NOT armed.`);
                 return;
             }
             /*
              * First buzz wins.
              */
             if (winningTeam !== null) {
+                console.log(`[Host Buzzer] Ignored BUZZ from Team ${team}: Team ${winningTeam} already buzzed first.`);
                 return;
             }
             winningTeam = team;
+            console.log(`%c[Host Buzzer]%c 🔔 FIRST BUZZ: Team ${team} WON THE BUZZ!`, "color: #ef4444; font-weight: bold; font-size: 15px;", "color: inherit;");
             buzzersArmed = false;
             playTeamBuzzer();
             const lbl1 = document.getElementById("label-team1");
@@ -6137,6 +6144,7 @@
             clearTeamBuzzVisuals();
             winningTeam = null;
             buzzersArmed = true;
+            console.log("%c[Host Buzzer]%c 🎯 Buzzers ARMED! Listening for buzzes...", "color: #eab308; font-weight: bold; font-size: 13px;", "color: inherit;");
             // Check if any phones are actually connected
             const anyPhoneConnected =
                 peers[0].connected ||
