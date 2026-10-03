@@ -5650,10 +5650,9 @@
                      */
                     if (msg.type === "PHONE_JOINED") {
                         const team = Number(msg.team);
-                        console.log(`%c[Host WebRTC]%c 📱 Phone joined for Team ${team} (${msg.name || "Team " + (team + 1)})! Starting handshake...`, "color: #8b5cf6; font-weight: bold;", "color: inherit;");
+                        console.log(`%c[Host WebRTC]%c 📱 Phone joined for Team ${team} (${msg.name || "Team " + (team + 1)})! Awaiting phone offer...`, "color: #8b5cf6; font-weight: bold;", "color: inherit;");
                         peers[team].phoneToken = msg.phoneToken || peers[team].phoneToken;
                         peers[team].releaseSent = false;
-                        await createPeerConnection(team);
                     }
                     /*
                      * WebRTC signaling message from phone.
@@ -5784,19 +5783,9 @@
             }
             updateWebRTCLobbyState();
         }
-        async function createPeerConnection(team) {
-            /*
-             * Close old connection if one exists.
-             */
+        async function handlePhoneOffer(team, offerData) {
+            console.log(`%c[Host WebRTC]%c 📥 Received WebRTC Offer from Team ${team}! Creating answer...`, "color: #06b6d4; font-weight: bold;", "color: inherit;");
             if (peers[team].pc) {
-                const state =
-                    peers[team].pc.connectionState;
-                if (
-                    state === "connected" ||
-                    state === "connecting"
-                ) {
-                    return;
-                }
                 try {
                     peers[team].pc.close();
                 } catch (e) { }
@@ -5809,69 +5798,29 @@
                 ];
             }
             const pc = new RTCPeerConnection({
-                iceServers: window.cachedIceServers
+                iceServers: window.cachedIceServers,
+                iceCandidatePoolSize: 2
             });
             peers[team].pc = pc;
-            /*
-             * Host creates the DataChannel.
-             */
-            const channel = pc.createDataChannel(
-                "buzzer",
-                {
-                    ordered: true
-                }
-            );
-            peers[team].channel = channel;
-            channel.onopen = () => {
-                peers[team].connected = true;
-                console.log(`%c[Host WebRTC]%c ✅ Direct DataChannel OPEN for Team ${team}! P2P connected.`, "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
-                updateWebRTCLobbyState();
-                /*
-                 * IMPORTANT:
-                 * If host already armed the buzzers before
-                 * the phone connected, immediately send ARM.
-                 * Heartbeat also starts here since we are in
-                 * an active face-off.
-                 */
-                if (buzzersArmed) {
-                    sendToTeam(
-                        team,
-                        {
-                            type: "ARM"
-                        }
-                    );
-                    startHeartbeat(team, pc, channel);
-                }
-            };
-            channel.onclose = () => {
-                peers[team].connected = false;
-                console.warn(`[Host WebRTC] ❌ DataChannel CLOSED for Team ${team}`);
-                updateWebRTCLobbyState();
-            };
-            channel.onerror = (error) => {
-            };
-            channel.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data);
-                    if (message.type === "__FF_HEARTBEAT_PONG") {
-                        peers[team].lastPongAt = Date.now();
-                        return;
-                    }
-                } catch (e) { }
-                handleBuzzerMessage(team, event.data);
-            };
-            /*
-             * Trickle ICE: stream candidates live to phone.
-             */
+            peers[team].remoteDescriptionSet = false;
+            peers[team].candidateQueue = [];
+
             pc.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log(`[Host WebRTC] 📡 Streaming candidate to Team ${team}`);
                     sendSignal(team, {
                         type: "candidate",
-                        candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate
+                        candidate: event.candidate.toJSON ? event.candidate.toJSON() : {
+                            candidate: event.candidate.candidate,
+                            sdpMid: event.candidate.sdpMid,
+                            sdpMLineIndex: event.candidate.sdpMLineIndex
+                        }
                     });
                 }
             };
+
             pc.onconnectionstatechange = () => {
+                console.log(`[Host WebRTC] PeerConnection state for Team ${team}: ${pc.connectionState}`);
                 if (pc.connectionState === "connected") {
                     peers[team].connected = true;
                     updateWebRTCLobbyState();
@@ -5885,20 +5834,71 @@
                     releaseFailedPhone(team, pc);
                 }
             };
+
             /*
-             * Create and send OFFER immediately (Trickle ICE).
+             * Host receives incoming DataChannel created by Phone.
              */
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(
-                offer
-            );
-            sendSignal(
-                team,
-                {
-                    type: "offer",
-                    offer: pc.localDescription
+            pc.ondatachannel = (event) => {
+                const channel = event.channel;
+                peers[team].channel = channel;
+                channel.onopen = () => {
+                    peers[team].connected = true;
+                    console.log(`%c[Host WebRTC]%c ✅ Direct DataChannel OPEN for Team ${team}! P2P connected.`, "color: #22c55e; font-weight: bold; font-size: 13px;", "color: inherit;");
+                    updateWebRTCLobbyState();
+                    if (buzzersArmed) {
+                        sendToTeam(
+                            team,
+                            {
+                                type: "ARM"
+                            }
+                        );
+                        startHeartbeat(team, pc, channel);
+                    }
+                };
+                channel.onclose = () => {
+                    peers[team].connected = false;
+                    console.warn(`[Host WebRTC] ❌ DataChannel CLOSED for Team ${team}`);
+                    updateWebRTCLobbyState();
+                };
+                channel.onerror = (error) => {
+                    console.error(`[Host WebRTC] DataChannel error for Team ${team}:`, error);
+                };
+                channel.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        if (message.type === "__FF_HEARTBEAT_PONG") {
+                            peers[team].lastPongAt = Date.now();
+                            return;
+                        }
+                    } catch (e) { }
+                    handleBuzzerMessage(team, event.data);
+                };
+            };
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+                peers[team].remoteDescriptionSet = true;
+                if (peers[team].candidateQueue) {
+                    for (const candidate of peers[team].candidateQueue) {
+                        try {
+                            await pc.addIceCandidate(candidate);
+                        } catch (error) { }
+                    }
+                    peers[team].candidateQueue = [];
                 }
-            );
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                const answerPayload = pc.localDescription.toJSON
+                    ? pc.localDescription.toJSON()
+                    : { type: pc.localDescription.type, sdp: pc.localDescription.sdp };
+                console.log(`%c[Host WebRTC]%c 📤 Sent WebRTC Answer to Team ${team}`, "color: #10b981; font-weight: bold;", "color: inherit;");
+                sendSignal(team, {
+                    type: "answer",
+                    answer: answerPayload
+                });
+            } catch (err) {
+                console.error("[Host WebRTC] Error setting remote offer or creating answer:", err);
+            }
         }
         /* ------------------------------------------------------------
            HANDLE PHONE SIGNALING
@@ -5907,39 +5907,17 @@
             team,
             data
         ) {
-            const pc = peers[team].pc;
-            if (!pc) {
+            if (!data) return;
+            if (data.type === "offer" && data.offer) {
+                await handlePhoneOffer(team, data.offer);
                 return;
             }
-            /*
-             * PHONE ANSWER
-             */
-            if (data.type === "answer") {
-                await pc.setRemoteDescription(
-                    new RTCSessionDescription(
-                        data.answer
-                    )
-                );
-                peers[team].remoteDescriptionSet = true;
-                if (peers[team].candidateQueue) {
-                    for (const candidate of peers[team].candidateQueue) {
-                        try {
-                            await pc.addIceCandidate(candidate);
-                        } catch (error) {
-                        }
-                    }
-                    peers[team].candidateQueue = [];
-                }
-                return;
-            }
-            /*
-             * PHONE ICE CANDIDATE
-             */
-            if (data.type === "candidate") {
+            if (data.type === "candidate" && data.candidate) {
                 const candidate = new RTCIceCandidate(
                     data.candidate
                 );
-                if (!peers[team].remoteDescriptionSet) {
+                const pc = peers[team].pc;
+                if (!pc || !peers[team].remoteDescriptionSet) {
                     if (!peers[team].candidateQueue) {
                         peers[team].candidateQueue = [];
                     }
@@ -5950,6 +5928,7 @@
                     } catch (error) {
                     }
                 }
+                return;
             }
         }
         /* ------------------------------------------------------------
