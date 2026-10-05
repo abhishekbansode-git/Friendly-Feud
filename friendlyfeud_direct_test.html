@@ -5660,6 +5660,9 @@
                         peers[team].releaseSent = false;
                         peers[team].wsConnected = true;
                         updateWebRTCLobbyState();
+                        if (buzzersArmed) {
+                            sendToTeam(team, { type: "ARM" });
+                        }
                     }
                     /*
                      * WebRTC signaling message from phone.
@@ -5845,8 +5848,8 @@
                     pc.connectionState === "closed"
                 ) {
                     peers[team].connected = false;
+                    console.log(`[Host WebRTC] ℹ️ WebRTC peer connection for Team ${team} ended. Operating seamlessly on WebSocket fallback.`);
                     updateWebRTCLobbyState();
-                    releaseFailedPhone(team, pc);
                 }
             };
 
@@ -6141,8 +6144,8 @@
             console.log("%c[Host Buzzer]%c 🎯 Buzzers ARMED! Listening for buzzes...", "color: #eab308; font-weight: bold; font-size: 13px;", "color: inherit;");
             // Check if any phones are actually connected
             const anyPhoneConnected =
-                peers[0].connected ||
-                peers[1].connected;
+                peers[0].connected || peers[0].wsConnected ||
+                peers[1].connected || peers[1].wsConnected;
             sendToBothTeams({
                 type: "ARM"
             });

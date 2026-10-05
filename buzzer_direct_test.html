@@ -736,8 +736,7 @@
     function handleGameMessage(raw) {
       let msg;
       try {
-        msg =
-          JSON.parse(raw);
+        msg = typeof raw === "string" ? JSON.parse(raw) : raw;
       } catch (e) {
         return;
       }
