@@ -798,12 +798,10 @@
         console.warn(`[Buzzer] Buzz ignored: phoneArmed=${phoneArmed}, phoneBuzzed=${phoneBuzzed}`);
         return;
       }
-      if (
-        !channel ||
-        channel.readyState !==
-        "open"
-      ) {
-        console.error(`[Buzzer] Buzz failed: DataChannel is not open (state: ${channel ? channel.readyState : "null"})`);
+      const canSendWebRTC = channel && channel.readyState === "open";
+      const canSendWs = signalingWs && signalingWs.readyState === WebSocket.OPEN;
+      if (!canSendWebRTC && !canSendWs) {
+        console.error("[Buzzer] Buzz failed: neither DataChannel nor WebSocket is open");
         return;
       }
       phoneBuzzed = true;
@@ -819,10 +817,15 @@
           team,
           timestamp: Date.now()
         };
-        channel.send(JSON.stringify(payload));
-        console.log("%c[Buzzer Action]%c 🔔 BUZZ SENT TO HOST!", "color: #ef4444; font-weight: bold; font-size: 14px;", "color: inherit;", payload);
+        if (canSendWebRTC) {
+          channel.send(JSON.stringify(payload));
+          console.log("%c[Buzzer Action]%c 🔔 BUZZ SENT TO HOST (Direct WebRTC)!", "color: #ef4444; font-weight: bold; font-size: 14px;", "color: inherit;", payload);
+        } else {
+          sendSignal(payload);
+          console.log("%c[Buzzer Action]%c 🔔 BUZZ SENT TO HOST (WebSocket Fallback)!", "color: #ef4444; font-weight: bold; font-size: 14px;", "color: inherit;", payload);
+        }
       } catch (error) {
-        console.error("[Buzzer Action] Failed to send buzz over DataChannel:", error);
+        console.error("[Buzzer Action] Failed to send buzz:", error);
         phoneBuzzed = false;
         phoneArmed = true;
         btn.disabled = false;
