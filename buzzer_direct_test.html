@@ -609,34 +609,19 @@
           if (channel && channel.readyState === "open") {
             return;
           }
+          // Filter out TCP candidates (buzzers run exclusively on UDP)
+          if (event.candidate.protocol === "tcp" || (event.candidate.candidate && event.candidate.candidate.includes(" tcp "))) {
+            return;
+          }
           console.log("[Buzzer WebRTC] 📡 Streaming phone candidate to host");
-          const candPayload = event.candidate.toJSON ? event.candidate.toJSON() : {
-            candidate: event.candidate.candidate,
-            sdpMid: event.candidate.sdpMid,
-            sdpMLineIndex: event.candidate.sdpMLineIndex
-          };
           sendSignal({
             type: "candidate",
-            candidate: candPayload
-          });
-
-          // Hotspot Gateway candidate injection for Windows mDNS bypass
-          const candStr = event.candidate.candidate;
-          if (candStr && candStr.includes(".local") && candStr.includes("typ host")) {
-            const commonHotspotIps = ["192.168.43.1", "192.168.225.1", "172.20.10.1"];
-            for (const ip of commonHotspotIps) {
-              const injectedStr = candStr.replace(/\b[0-9a-zA-Z._-]+\.local\b/, ip);
-              console.log(`[Buzzer WebRTC] 🚀 Streaming injected hotspot IP candidate: ${ip}`);
-              sendSignal({
-                type: "candidate",
-                candidate: {
-                  candidate: injectedStr,
-                  sdpMid: event.candidate.sdpMid,
-                  sdpMLineIndex: event.candidate.sdpMLineIndex
-                }
-              });
+            candidate: event.candidate.toJSON ? event.candidate.toJSON() : {
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid,
+              sdpMLineIndex: event.candidate.sdpMLineIndex
             }
-          }
+          });
         }
       };
 
@@ -651,9 +636,16 @@
           peerRecoveryTimer = null;
           status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
         } else if (["failed", "closed"].includes(pc.connectionState)) {
-          connLbl.textContent = "Reconnecting...";
-          connLbl.style.color = "#facc15";
-          requestPeerRecovery();
+          if (signalingWs && signalingWs.readyState === WebSocket.OPEN) {
+            console.log("[Buzzer WebRTC] PeerConnection failed. Using open WebSocket fallback seamlessly.");
+            connLbl.textContent = "Connected";
+            connLbl.style.color = "#22c55e";
+            status.textContent = phoneArmed ? "TAP NOW!" : "Waiting for next question...";
+          } else {
+            connLbl.textContent = "Reconnecting...";
+            connLbl.style.color = "#facc15";
+            requestPeerRecovery();
+          }
         }
       };
 
@@ -730,6 +722,11 @@
         try {
           await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (e) { }
+        return;
+      }
+      if (data.type === "ARM" || data.type === "LOCK" || data.type === "RESET" || data.type === "GAME_OVER") {
+        console.log(`[Buzzer Fallback] Received ${data.type} via WebSocket`);
+        handleGameMessage(JSON.stringify(data));
         return;
       }
     }
@@ -914,11 +911,11 @@
           console.log(`%c[Buzzer Signaling]%c 🌐 Connected to Cloudflare signaling worker (room: ${room}, team: ${team})`, "color: #3b82f6; font-weight: bold;", "color: inherit;");
           retryDelay = 1000;
           connLbl.textContent =
-            "Connecting...";
+            "Connected";
           connLbl.style.color =
-            "#facc15";
+            "#22c55e";
           status.textContent =
-            "Connecting buzzer...";
+            "Waiting for next question...";
           initiatePhoneCall();
           // Registration is now performed by the Durable Object
           // during the WebSocket upgrade using URL parameters.

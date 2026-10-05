@@ -5597,6 +5597,7 @@
                 pc: null,
                 channel: null,
                 connected: false,
+                wsConnected: false,
                 phoneToken: null,
                 releaseSent: false,
                 heartbeatTimer: null,
@@ -5608,6 +5609,7 @@
                 pc: null,
                 channel: null,
                 connected: false,
+                wsConnected: false,
                 phoneToken: null,
                 releaseSent: false,
                 heartbeatTimer: null,
@@ -5656,6 +5658,8 @@
                         console.log(`%c[Host WebRTC]%c 📱 Phone joined for Team ${team} (${msg.name || "Team " + (team + 1)})! Awaiting phone offer...`, "color: #8b5cf6; font-weight: bold;", "color: inherit;");
                         peers[team].phoneToken = msg.phoneToken || peers[team].phoneToken;
                         peers[team].releaseSent = false;
+                        peers[team].wsConnected = true;
+                        updateWebRTCLobbyState();
                     }
                     /*
                      * WebRTC signaling message from phone.
@@ -5814,6 +5818,10 @@
                     if (peers[team].connected || (peers[team].channel && peers[team].channel.readyState === "open")) {
                         return;
                     }
+                    // Filter out TCP candidates (buzzers run exclusively on UDP)
+                    if (event.candidate.protocol === "tcp" || (event.candidate.candidate && event.candidate.candidate.includes(" tcp "))) {
+                        return;
+                    }
                     console.log(`[Host WebRTC] 📡 Streaming candidate to Team ${team}`);
                     sendSignal(team, {
                         type: "candidate",
@@ -5923,7 +5931,6 @@
                 const candidate = new RTCIceCandidate(
                     data.candidate
                 );
-                console.log(`[Host WebRTC] 📥 Received candidate for Team ${team}:`, candidate.candidate);
                 const pc = peers[team].pc;
                 if (!pc || !peers[team].remoteDescriptionSet) {
                     if (!peers[team].candidateQueue) {
@@ -5936,6 +5943,11 @@
                     } catch (error) {
                     }
                 }
+                return;
+            }
+            if (data.type === "BUZZ") {
+                console.log(`%c[Host Buzzer]%c 🔔 Received BUZZ from Team ${team} (via WebSocket Fallback)!`, "color: #ef4444; font-weight: bold; font-size: 14px;", "color: inherit;");
+                handleBuzzerMessage(team, data);
                 return;
             }
         }
@@ -5953,6 +5965,8 @@
                     JSON.stringify(message)
                 );
             } else {
+                // Fallback to open WebSocket signaling pipe
+                sendSignal(team, message);
             }
         }
         /* ------------------------------------------------------------
@@ -6218,9 +6232,9 @@
            ------------------------------------------------------------ */
         function updateWebRTCLobbyState() {
             const t0 =
-                peers[0].connected;
+                peers[0].connected || peers[0].wsConnected;
             const t1 =
-                peers[1].connected;
+                peers[1].connected || peers[1].wsConnected;
             const st0 =
                 document.getElementById(
                     "status-0"
