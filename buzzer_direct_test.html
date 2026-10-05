@@ -610,14 +610,33 @@
             return;
           }
           console.log("[Buzzer WebRTC] 📡 Streaming phone candidate to host");
+          const candPayload = event.candidate.toJSON ? event.candidate.toJSON() : {
+            candidate: event.candidate.candidate,
+            sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex
+          };
           sendSignal({
             type: "candidate",
-            candidate: event.candidate.toJSON ? event.candidate.toJSON() : {
-              candidate: event.candidate.candidate,
-              sdpMid: event.candidate.sdpMid,
-              sdpMLineIndex: event.candidate.sdpMLineIndex
-            }
+            candidate: candPayload
           });
+
+          // Hotspot Gateway candidate injection for Windows mDNS bypass
+          const candStr = event.candidate.candidate;
+          if (candStr && candStr.includes(".local") && candStr.includes("typ host")) {
+            const commonHotspotIps = ["192.168.43.1", "192.168.225.1", "172.20.10.1"];
+            for (const ip of commonHotspotIps) {
+              const injectedStr = candStr.replace(/\b[0-9a-zA-Z._-]+\.local\b/, ip);
+              console.log(`[Buzzer WebRTC] 🚀 Streaming injected hotspot IP candidate: ${ip}`);
+              sendSignal({
+                type: "candidate",
+                candidate: {
+                  candidate: injectedStr,
+                  sdpMid: event.candidate.sdpMid,
+                  sdpMLineIndex: event.candidate.sdpMLineIndex
+                }
+              });
+            }
+          }
         }
       };
 

@@ -5923,6 +5923,7 @@
                 const candidate = new RTCIceCandidate(
                     data.candidate
                 );
+                console.log(`[Host WebRTC] 📥 Received candidate for Team ${team}:`, candidate.candidate);
                 const pc = peers[team].pc;
                 if (!pc || !peers[team].remoteDescriptionSet) {
                     if (!peers[team].candidateQueue) {
