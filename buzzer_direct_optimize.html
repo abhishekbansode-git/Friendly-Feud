@@ -1150,6 +1150,18 @@
         .request("screen")
         .catch(() => { });
     }
+    // Clean socket closure on tab close or swipe away
+    window.addEventListener("pagehide", () => {
+      if (signalingWs) {
+        try { signalingWs.close(1000, "Tab closed"); } catch (e) { }
+      }
+    });
+    window.addEventListener("beforeunload", () => {
+      if (signalingWs) {
+        try { signalingWs.close(1000, "Tab closed"); } catch (e) { }
+      }
+    });
+
     // ============================================================
     // START
     // ============================================================

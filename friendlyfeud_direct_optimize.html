@@ -5669,6 +5669,21 @@
                     /*
                      * WebRTC signaling message from phone.
                      */
+                    if (msg.type === "PHONE_LEFT") {
+                        const team = Number(msg.team);
+                        console.log(`%c[Host WebRTC]%c 📴 Phone disconnected for Team ${team}`, "color: #f97316; font-weight: bold;", "color: inherit;");
+                        peers[team].wsConnected = false;
+                        peers[team].connected = false;
+                        if (peers[team].pc) {
+                            try { peers[team].pc.close(); } catch (e) { }
+                            peers[team].pc = null;
+                        }
+                        if (peers[team].channel) {
+                            try { peers[team].channel.close(); } catch (e) { }
+                            peers[team].channel = null;
+                        }
+                        updateWebRTCLobbyState();
+                    }
                     if (msg.type === "SIGNAL") {
                         const team = Number(msg.team);
                         await handleSignalMessage(
@@ -6441,7 +6456,7 @@
              * room + team + phone page.
              */
             const basePhoneUrl =
-                "https://abhishekbansode-git.github.io/Friendly-Feud/buzzer_direct_test.html";
+                "https://abhishekbansode-git.github.io/Friendly-Feud/buzzer_direct_optimize.html";
             const team0Url =
                 `${basePhoneUrl}` +
                 `?room=${roomCode}` +
@@ -6521,7 +6536,7 @@
             qrBox0.innerHTML = "";
             qrBox1.innerHTML = "";
             const basePhoneUrl =
-                "https://abhishekbansode-git.github.io/Friendly-Feud/buzzer_direct_test.html";
+                "https://abhishekbansode-git.github.io/Friendly-Feud/buzzer_direct_optimize.html";
             const team0Url =
                 `${basePhoneUrl}` +
                 `?room=${roomCode}` +
