@@ -2148,10 +2148,83 @@
                 display: flex !important;
             }
         }
+    
+        /* Global Fullscreen Corner Button (Visible on all sections) */
+        .fullscreen-corner-btn {
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top));
+            right: max(24px, env(safe-area-inset-right));
+            width: clamp(48px, 4.5vw, 84px);
+            height: clamp(48px, 4.5vw, 84px);
+            background: rgba(15, 23, 42, 0.75);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            padding: 0;
+            outline: none;
+        }
+
+        .fullscreen-corner-btn:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #f59e0b;
+            color: #f59e0b;
+            transform: scale(1.08);
+            box-shadow: 0 6px 24px rgba(245, 158, 11, 0.35);
+        }
+
+        .fullscreen-corner-btn:active {
+            transform: scale(0.92);
+        }
+
+        .fullscreen-corner-btn svg {
+            width: 52%;
+            height: 52%;
+            transition: transform 0.2s ease;
+        }
+
+        /* Show enter icon by default, hide exit icon */
+        .fullscreen-corner-btn .fs-icon-exit {
+            display: none;
+        }
+
+        /* In fullscreen: show exit icon, hide enter icon */
+        .fullscreen-corner-btn.is-fullscreen .fs-icon-enter {
+            display: none;
+        }
+
+        .fullscreen-corner-btn.is-fullscreen .fs-icon-exit {
+            display: block;
+        }
+
+        @media print {
+            .fullscreen-corner-btn {
+                display: none !important;
+            }
+        }
+
     </style>
 </head>
 
 <body>
+    <!-- Persistent Top-Corner Fullscreen Button (Visible on all sections) -->
+    <button class="fullscreen-corner-btn" id="global-fullscreen-btn" onclick="toggleFullscreen()" title="Enter Fullscreen" aria-label="Toggle Fullscreen">
+        <svg class="fs-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+        </svg>
+        <svg class="fs-icon-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+        </svg>
+    </button>
+
     <div class="rotate-prompt" id="rotate-prompt">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
@@ -2401,7 +2474,6 @@
                     <button class="settings-btn btn-success" onclick="showView('team-setup-view')">Play</button>
                     <button class="settings-btn btn-warning" onclick="showView('settings-view')">Settings</button>
                     <button class="settings-btn" onclick="showView('rules-view')">Rules</button>
-                    <button class="settings-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen Mode">Fullscreen</button>
                 </div>
             </div>
 
@@ -2843,12 +2915,6 @@
                                 <line x1="21" y1="12" x2="9" y2="12"></line>
                             </svg>
                         </button>
-                        <button class="icon-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen"
-                            style="flex-shrink: 0; width: 89px; height: 89px; min-width: 89px; min-height: 89px; padding: 0; border-radius: 50%;">
-                            <svg viewBox="0 0 24 24" style="width: 41px; height: 41px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;">
-                                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                            </svg>
-                        </button>
                         <div class="sep-line"
                             style="width: 4px; height: 89px; background: rgba(255,255,255,0.2); border-radius: 2px;">
                         </div>
@@ -2942,7 +3008,23 @@
         }
         window.addEventListener('load', resizeApp);
 
-        // Fullscreen toggle helper for tablets & mobile
+        // Fullscreen toggle helper & icon synchronizer for tablets & mobile
+        function updateFullscreenIcons() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            const btn = document.getElementById('global-fullscreen-btn');
+            if (btn) {
+                if (isFS) {
+                    btn.classList.add('is-fullscreen');
+                    btn.setAttribute('title', 'Exit Fullscreen');
+                    btn.setAttribute('aria-label', 'Exit Fullscreen');
+                } else {
+                    btn.classList.remove('is-fullscreen');
+                    btn.setAttribute('title', 'Enter Fullscreen');
+                    btn.setAttribute('aria-label', 'Enter Fullscreen');
+                }
+            }
+        }
+
         function toggleFullscreen() {
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 const docEl = document.documentElement;
@@ -2960,9 +3042,19 @@
             }
             setTimeout(resizeApp, 150);
             setTimeout(resizeApp, 400);
+            setTimeout(updateFullscreenIcons, 150);
+            setTimeout(updateFullscreenIcons, 400);
         }
-        document.addEventListener('fullscreenchange', function () { setTimeout(resizeApp, 100); });
-        document.addEventListener('webkitfullscreenchange', function () { setTimeout(resizeApp, 100); });
+
+        document.addEventListener('fullscreenchange', function () {
+            setTimeout(resizeApp, 100);
+            updateFullscreenIcons();
+        });
+        document.addEventListener('webkitfullscreenchange', function () {
+            setTimeout(resizeApp, 100);
+            updateFullscreenIcons();
+        });
+        window.addEventListener('load', updateFullscreenIcons);
 
         function playParticles(element = null) {
             if (element) {
