@@ -40,6 +40,11 @@
             outline: none !important;
         }
 
+        input, textarea, [contenteditable="true"] {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+        }
+
         html,
         body {
             font-family: 'Inter', sans-serif;
@@ -2174,7 +2179,8 @@
         }
 
         @media print {
-            .fullscreen-corner-btn {
+            .fullscreen-corner-btn,
+            .rotate-prompt {
                 display: none !important;
             }
         }
@@ -2992,9 +2998,19 @@
             img.src = STRIKE_IMG_SRC;
         });
         // Scaling logic for 4K (Supports Desktop, Tablet, and Mobile in Landscape)
-        function resizeApp() {
+        function isEditingText() {
+            const el = document.activeElement;
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+        }
+
+        function resizeApp(force = false) {
             const container = document.querySelector('.app-container');
             if (!container) return;
+
+            // Skip resizing while mobile/tablet virtual keyboard is open for text editing
+            if (!force && isEditingText()) return;
 
             // Use visualViewport if available for accurate dimensions with mobile browser dynamic toolbars
             const vv = window.visualViewport;
@@ -3009,17 +3025,24 @@
             container.style.transform = `translate(-50%, -50%) scale(${scale})`;
         }
 
-        window.addEventListener('resize', resizeApp);
+        window.addEventListener('resize', function () { resizeApp(false); });
         window.addEventListener('orientationchange', function () {
-            setTimeout(resizeApp, 100);
-            setTimeout(resizeApp, 300);
-            setTimeout(resizeApp, 600);
+            setTimeout(function () { resizeApp(true); }, 100);
+            setTimeout(function () { resizeApp(true); }, 300);
+            setTimeout(function () { resizeApp(true); }, 600);
         });
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', resizeApp);
-            window.visualViewport.addEventListener('scroll', resizeApp);
+            window.visualViewport.addEventListener('resize', function () { resizeApp(false); });
         }
-        window.addEventListener('load', resizeApp);
+        document.addEventListener('focusout', function () {
+            setTimeout(function () {
+                if (!isEditingText()) {
+                    window.scrollTo(0, 0);
+                    resizeApp(true);
+                }
+            }, 250);
+        });
+        window.addEventListener('load', function () { resizeApp(true); });
 
         // Fullscreen toggle helper & icon synchronizer for tablets & mobile
         function updateFullscreenIcons() {
