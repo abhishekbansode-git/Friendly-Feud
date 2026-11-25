@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Friendly Feud</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,23 +30,10 @@
             -webkit-tap-highlight-color: transparent !important;
             -webkit-touch-callout: none !important;
         }
+        button, a, input, select, textarea, div { outline: none !important; }
+        input, textarea, [contenteditable="true"] { -webkit-user-select: text !important; user-select: text !important; }
 
-        button, a, input, select, textarea, div {
-            -webkit-tap-highlight-color: transparent !important;
-            outline: none !important;
-        }
-
-        button:focus, button:focus-visible {
-            outline: none !important;
-        }
-
-        input, textarea, [contenteditable="true"] {
-            -webkit-user-select: text !important;
-            user-select: text !important;
-        }
-
-        html,
-        body {
+        html, body {
             font-family: 'Inter', sans-serif;
             width: 100%;
             height: 100%;
@@ -2121,138 +2108,50 @@
             line-height: 1.1;
         }
     
-        /* Zoom / Fullscreen Button: Hidden on Desktop Web, Visible only on Mobile & Tablets */
-        .fullscreen-corner-btn {
-            display: none;
-        }
-
+        /* Corner Controls (Rotate + Zoom): Mobile & Tablet Only */
+        .mobile-corner-controls { display: none; }
         @media (pointer: coarse), (max-width: 1366px) {
-            .fullscreen-corner-btn {
-                display: flex;
-                position: fixed;
-                top: max(16px, env(safe-area-inset-top));
-                right: max(20px, env(safe-area-inset-right));
-                width: clamp(56px, 6vw, 92px);
-                height: clamp(56px, 6vw, 92px);
-                background: rgba(15, 23, 42, 0.85);
-                border: 3px solid rgba(255, 255, 255, 0.4);
-                border-radius: 50%;
-                color: #ffffff;
-                cursor: pointer;
-                justify-content: center;
-                align-items: center;
-                z-index: 99999;
-                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-                -webkit-backdrop-filter: blur(12px);
-                backdrop-filter: blur(12px);
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-                padding: 0;
-                outline: none;
-                -webkit-tap-highlight-color: transparent !important;
+            .mobile-corner-controls {
+                display: flex; position: fixed; z-index: 99999; gap: 12px; align-items: center;
+                top: max(16px, env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right));
             }
-
-            .fullscreen-corner-btn:active {
-                background: #3b82f6;
-                border-color: white;
-                transform: scale(0.92);
+            .corner-icon-btn {
+                display: flex; padding: 0; cursor: pointer;
+                width: clamp(46px, 5.5vw, 84px); height: clamp(46px, 5.5vw, 84px);
+                background: rgba(15, 23, 42, 0.85); border: 3px solid rgba(255, 255, 255, 0.4);
+                border-radius: 50%; color: #fff; justify-content: center; align-items: center;
+                -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); transition: all 0.25s ease;
             }
+            .corner-icon-btn:active { background: #3b82f6; border-color: #fff; transform: scale(0.92); }
+            .corner-icon-btn.is-rotated { border-color: #f59e0b; color: #f59e0b; }
         }
-
-        .fullscreen-corner-btn svg {
-            width: 52%;
-            height: 52%;
-            transition: transform 0.2s ease;
-        }
-
-        /* Opposite icons: show enter icon by default, hide exit icon */
-        .fullscreen-corner-btn .fs-icon-exit {
-            display: none;
-        }
-
-        /* In fullscreen: show exit icon, hide enter icon */
-        .fullscreen-corner-btn.is-fullscreen .fs-icon-enter {
-            display: none;
-        }
-
-        .fullscreen-corner-btn.is-fullscreen .fs-icon-exit {
-            display: block;
-        }
-
-        /* Rotate device overlay for portrait mode on mobile */
-        .rotate-prompt {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
-            background: rgba(15, 23, 42, 0.96);
-            z-index: 999999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: #ffffff;
-            text-align: center;
-            padding: 30px;
-            box-sizing: border-box;
-            -webkit-backdrop-filter: blur(15px);
-            backdrop-filter: blur(15px);
-        }
-
-        .rotate-prompt svg {
-            width: 90px;
-            height: 90px;
-            margin-bottom: 24px;
-            color: #f59e0b;
-            animation: rotatePromptAnim 2.5s infinite ease-in-out;
-        }
-
-        @keyframes rotatePromptAnim {
-            0%, 20% { transform: rotate(0deg); }
-            50%, 70% { transform: rotate(90deg); }
-            100% { transform: rotate(0deg); }
-        }
-
-        @media screen and (orientation: portrait) and (max-width: 1024px) {
-            .rotate-prompt {
-                display: flex !important;
-            }
-        }
-
-        @media print {
-            .fullscreen-corner-btn,
-            .rotate-prompt {
-                display: none !important;
-            }
-        }
-
+        .corner-icon-btn svg { width: 52%; height: 52%; transition: transform 0.25s ease; }
+        .corner-icon-btn.is-rotated svg { transform: rotate(-90deg); }
+        .corner-icon-btn .fs-icon-exit,
+        .corner-icon-btn.is-fullscreen .fs-icon-enter { display: none; }
+        .corner-icon-btn.is-fullscreen .fs-icon-exit { display: block; }
+        @media print { .mobile-corner-controls { display: none !important; } }
     </style>
 </head>
 
 <body>
-    <!-- Persistent Top-Corner Zoom In / Out (Fullscreen) Button for Mobile & Tablets -->
-    <button class="fullscreen-corner-btn" id="global-fullscreen-btn" onclick="toggleFullscreen()" title="Enter Fullscreen" aria-label="Toggle Fullscreen">
-        <svg class="fs-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-        </svg>
-        <svg class="fs-icon-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
-        </svg>
-    </button>
-
-    <!-- Mobile Portrait Warning Overlay -->
-    <div class="rotate-prompt" id="rotate-prompt">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-            <path d="M12 18h.01"></path>
-        </svg>
-        <h2 style="font-size: 26px; font-weight: 800; margin-bottom: 12px; letter-spacing: 0.5px;">PLEASE ROTATE YOUR DEVICE</h2>
-        <p style="font-size: 16px; opacity: 0.85; max-width: 320px; line-height: 1.5;">This game is designed to be played in landscape mode for the best experience.</p>
+    <div class="mobile-corner-controls" id="mobile-corner-controls">
+        <button class="corner-icon-btn" id="global-rotate-btn" onclick="toggleRotate()" title="Rotate Screen" aria-label="Rotate Screen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path>
+                <polyline points="21 3 21 8 16 8"></polyline>
+            </svg>
+        </button>
+        <button class="corner-icon-btn" id="global-fullscreen-btn" onclick="toggleFullscreen()" title="Enter Fullscreen" aria-label="Toggle Fullscreen">
+            <svg class="fs-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+            <svg class="fs-icon-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+            </svg>
+        </button>
     </div>
-
     <div class="app-container">
 
         <!-- Absolute Scoreboards -->
@@ -2997,100 +2896,123 @@
         document.querySelectorAll('#persistent-strikes img').forEach(function (img) {
             img.src = STRIKE_IMG_SRC;
         });
-        // Scaling logic for 4K (Supports Desktop, Tablet, and Mobile in Landscape)
+        // Responsive 4K Scaling (Desktop, Tablet, Mobile Portrait, Landscape & Manual Rotate)
+        let isManualRotated = false;
         function isEditingText() {
             const el = document.activeElement;
-            if (!el) return false;
-            const tag = el.tagName;
-            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+            return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
         }
-
+        function toggleRotate() {
+            isManualRotated = !isManualRotated;
+            const btn = document.getElementById('global-rotate-btn');
+            if (btn) btn.classList.toggle('is-rotated', isManualRotated);
+            resizeApp(true);
+        }
         function resizeApp(force = false) {
             const container = document.querySelector('.app-container');
             if (!container) return;
-
-            // Skip resizing while mobile/tablet virtual keyboard is open for text editing
-            if (!force && isEditingText()) return;
-
-            // Use visualViewport if available for accurate dimensions with mobile browser dynamic toolbars
+            if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) return;
+            const isPortraitTyping = isEditingText() && window.innerHeight > window.innerWidth;
+            if (!force && isEditingText() && !isPortraitTyping) return;
             const vv = window.visualViewport;
-            const windowWidth = vv ? vv.width : window.innerWidth;
-            const windowHeight = vv ? vv.height : window.innerHeight;
+            const w = vv ? vv.width : window.innerWidth;
+            const h = vv ? vv.height : window.innerHeight;
+            const offsetTop = vv ? vv.offsetTop : 0;
+            let scale, scaledW, scaledH, topGap, sideGap;
 
-            let scaleX = windowWidth / 3840;
-            let scaleY = windowHeight / 2160;
-            let scale = Math.min(scaleX, scaleY);
+            if (isManualRotated) {
+                scale = Math.min(h / 3840, w / 2160);
+                scaledW = 2160 * scale;
+                scaledH = 3840 * scale;
+                container.style.transformOrigin = 'center center';
+                container.style.top = '50%';
+                container.style.transform = `translate(-50%, -50%) rotate(90deg) scale(${scale})`;
+                topGap = (h - scaledH) / 2;
+                sideGap = (w - scaledW) / 2;
+            } else if (isPortraitTyping) {
+                scale = Math.min(w / 3840, h / 2160);
+                scaledW = 3840 * scale;
+                scaledH = 2160 * scale;
+                const centerY = offsetTop + h / 2;
+                container.style.transformOrigin = 'center center';
+                container.style.top = `${centerY}px`;
+                container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                topGap = Math.max(0, centerY - scaledH / 2);
+                sideGap = (w - scaledW) / 2;
+            } else {
+                scale = Math.min(w / 3840, h / 2160);
+                scaledW = 3840 * scale;
+                scaledH = 2160 * scale;
+                container.style.transformOrigin = 'center center';
+                container.style.top = '50%';
+                container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                topGap = (h - scaledH) / 2;
+                sideGap = (w - scaledW) / 2;
+            }
 
-            // Center using translate(-50%, -50%) and scale to fit viewport exactly
-            container.style.transform = `translate(-50%, -50%) scale(${scale})`;
-        }
-
-        window.addEventListener('resize', function () { resizeApp(false); });
-        window.addEventListener('orientationchange', function () {
-            setTimeout(function () { resizeApp(true); }, 100);
-            setTimeout(function () { resizeApp(true); }, 300);
-            setTimeout(function () { resizeApp(true); }, 600);
-        });
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', function () { resizeApp(false); });
-        }
-        document.addEventListener('focusout', function () {
-            setTimeout(function () {
-                if (!isEditingText()) {
-                    window.scrollTo(0, 0);
-                    resizeApp(true);
+            // Position corner controls in black area if available, otherwise cleanly inside top-right of stage
+            const controls = document.getElementById('mobile-corner-controls');
+            const fsBtn = document.getElementById('global-fullscreen-btn');
+            if (controls) {
+                const btnSize = (fsBtn && fsBtn.offsetWidth) ? fsBtn.offsetWidth : 52;
+                if (sideGap >= btnSize + 10) {
+                    controls.style.flexDirection = 'column';
+                    controls.style.top = `${Math.max(12, topGap + 12)}px`;
+                    controls.style.right = `${Math.max(8, (sideGap - btnSize) / 2)}px`;
+                } else if (topGap >= btnSize + 12) {
+                    controls.style.flexDirection = 'row';
+                    controls.style.top = `${Math.max(8, (topGap - btnSize) / 2)}px`;
+                    controls.style.right = `${Math.max(16, sideGap + 12)}px`;
+                } else {
+                    controls.style.flexDirection = 'row';
+                    controls.style.top = `${Math.max(12, topGap + 12)}px`;
+                    controls.style.right = `${Math.max(16, sideGap + 16)}px`;
                 }
-            }, 250);
+            }
+        }
+        window.addEventListener('resize', () => resizeApp(false));
+        window.addEventListener('orientationchange', () => {
+            if (window.innerWidth > window.innerHeight && isManualRotated) {
+                isManualRotated = false;
+                const btn = document.getElementById('global-rotate-btn');
+                if (btn) btn.classList.remove('is-rotated');
+            }
+            [100, 300, 600].forEach(ms => setTimeout(() => resizeApp(true), ms));
         });
-        window.addEventListener('load', function () { resizeApp(true); });
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', () => resizeApp(false));
+        document.addEventListener('focusin', () => {
+            if (isEditingText() && window.innerHeight > window.innerWidth) {
+                if (isManualRotated) {
+                    isManualRotated = false;
+                    const btn = document.getElementById('global-rotate-btn');
+                    if (btn) btn.classList.remove('is-rotated');
+                }
+                [0, 150, 350].forEach(ms => setTimeout(() => resizeApp(true), ms));
+            }
+        });
+        document.addEventListener('focusout', () => setTimeout(() => { if (!isEditingText()) { window.scrollTo(0, 0); resizeApp(true); } }, 250));
+        window.addEventListener('load', () => { resizeApp(true); updateFullscreenIcons(); });
 
-        // Fullscreen toggle helper & icon synchronizer for tablets & mobile
         function updateFullscreenIcons() {
             const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
             const btn = document.getElementById('global-fullscreen-btn');
-            if (btn) {
-                if (isFS) {
-                    btn.classList.add('is-fullscreen');
-                    btn.setAttribute('title', 'Exit Fullscreen');
-                    btn.setAttribute('aria-label', 'Exit Fullscreen');
-                } else {
-                    btn.classList.remove('is-fullscreen');
-                    btn.setAttribute('title', 'Enter Fullscreen');
-                    btn.setAttribute('aria-label', 'Enter Fullscreen');
-                }
-            }
+            if (!btn) return;
+            btn.classList.toggle('is-fullscreen', isFS);
+            btn.title = btn.ariaLabel = isFS ? 'Exit Fullscreen' : 'Enter Fullscreen';
         }
-
         function toggleFullscreen() {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                const docEl = document.documentElement;
-                if (docEl.requestFullscreen) {
-                    docEl.requestFullscreen().catch(function (e) { console.warn("Fullscreen request failed:", e); });
-                } else if (docEl.webkitRequestFullscreen) {
-                    docEl.webkitRequestFullscreen();
-                }
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            const docEl = document.documentElement;
+            if (!isFS) {
+                if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+                else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen().catch(function (e) { console.warn("Exit fullscreen failed:", e); });
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
             }
-            setTimeout(resizeApp, 150);
-            setTimeout(resizeApp, 400);
-            setTimeout(updateFullscreenIcons, 150);
-            setTimeout(updateFullscreenIcons, 400);
+            [150, 400].forEach(ms => setTimeout(() => { resizeApp(true); updateFullscreenIcons(); }, ms));
         }
-
-        document.addEventListener('fullscreenchange', function () {
-            setTimeout(resizeApp, 100);
-            updateFullscreenIcons();
-        });
-        document.addEventListener('webkitfullscreenchange', function () {
-            setTimeout(resizeApp, 100);
-            updateFullscreenIcons();
-        });
-        window.addEventListener('load', updateFullscreenIcons);
+        ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { setTimeout(() => resizeApp(true), 100); updateFullscreenIcons(); }));
 
         function playParticles(element = null) {
             if (element) {
